@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cantoral Laudibus</title>
+<title>Cantoral de la Schola</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -142,6 +142,7 @@ ul.lista .tt-wrap{min-width:0}
 .canto .b.r{padding-left:1.8em;font-style:italic}
 .canto .b.r .k{position:absolute;left:0;top:0;color:var(--rubric);font-style:normal}
 .canto .b.l{font-family:var(--sc);color:var(--gold);font-size:.8em;margin:1.4em 0 .2em;font-weight:500}
+.canto .b.l + .b.l{margin-top:0}
 
 /* Partituras gregorianas */
 .partitura{margin:.2em 0 1em;min-height:3em;color:var(--ink)}
@@ -230,7 +231,7 @@ svg.Exsurge{color:var(--ink);--exsurge-negative-fill:var(--paper)}
 <body>
 <header class="top">
   <div class="top-in">
-    <div class="brand">Cantoral <b>Laudibus</b></div>
+    <div class="brand">Cantoral <b>de la Schola</b></div>
     <div style="display:flex;align-items:center;gap:8px">
       <nav class="tabs" role="tablist">
         <button role="tab" data-act="tab" data-v="rep" id="tab-rep">Repertorio</button>
@@ -354,8 +355,11 @@ function parsearTexto(txt){
     const m=b.match(/^(\d+)\.\s+/);
     if(m){out.push(["v",+m[1],b.slice(m[0].length)]);continue}
     const ls=b.split("\n");
-    if(ls.length>1 && /^\d+\.\s+/.test(ls[1]) && ls[0].length<40){
-      out.push(["l",0,ls[0]]); const r=ls.slice(1).join("\n"); const m2=r.match(/^(\d+)\.\s+/);
+    // Hasta tres subtítulos cortos antes de una estrofa numerada («Primera tabla», «Dios del Éxodo», «Doxología:»…)
+    const k=ls.findIndex(l=>/^\d+\.\s+/.test(l));
+    if(k>0 && k<=3 && ls.slice(0,k).every(l=>l.trim().length<=70)){
+      ls.slice(0,k).forEach(l=>out.push(["l",0,l.trim()]));
+      const r=ls.slice(k).join("\n"), m2=r.match(/^(\d+)\.\s+/);
       out.push(["v",+m2[1],r.slice(m2[0].length)]);
     } else out.push(["r",0,b]);
   }
