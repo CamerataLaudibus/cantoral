@@ -288,7 +288,8 @@ const CATS = {
   "procesion-de-la-comunion-y-eucaristia": {n:"Comunión y Eucaristía", p:["comunion","accion"]},
   "maria-santisima": {n:"María Santísima", p:["mariano","salida","accion"]},
   "gregoriano": {n:"Gregoriano · Ordinario de la Misa", p:[]},
-  "gregoriano-himnos": {n:"Gregoriano · Himnos y antífonas", p:[]}
+  "gregoriano-himnos": {n:"Gregoriano · Himnos y antífonas", p:[]},
+  "gregoriano-propios": {n:"Gregoriano · Propios de la schola", p:[]}
 };
 const DEFAULT_PARTS = ["entrada","ofertorio","comunion","accion","salida"];
 
@@ -299,7 +300,8 @@ const LS = {
   set(k,v){try{localStorage.setItem("cantoral:"+k,JSON.stringify(v))}catch{}}
 };
 let extra = {};                      // (sin uso: los cantos se editan en la planilla)
-let AVISOS = [];                     // filas de la planilla para revisar
+let AVISOS = [];
+let OCULTOS = new Set();             // gregorianos marcados «Visible: No» en la planilla «Gregorianos visibles»                     // filas de la planilla para revisar
 
 /* ===== Carpeta de Google Drive =====
    FUENTE: dirección de la aplicación web de Apps Script que lee la carpeta
@@ -343,25 +345,29 @@ function canto(id){id=String(id);if(id[0]==="g")return cantoGreg(id);return cant
 function sugeridas(c){return (c.p&&c.p.length)?c.p:((CATS[c.c]?.p)||[])}
 function catNombre(k){return CATS[k]?.n || k || "Sin categoría"}
 function rotulo(c){return c.greg? c.t+(c.sub?" · "+c.sub:"") : c.n+". "+c.t}
-function primerVerso(c){if(c.greg)return [c.sub,c.f].filter(Boolean).join(" · ");const e=(c.e||[]).find(x=>x[0]!=="l");return e?e[2].split("\n")[0]:""}
+function primerVerso(c){if(c.greg&&c.propio)return "Gregoriano propio";if(c.greg)return [c.sub,c.f].filter(Boolean).join(" · ");const e=(c.e||[]).find(x=>x[0]!=="l");return e?e[2].split("\n")[0]:""}
 function busca(c,q){if(!q) return true;const h=norm(c.t+" "+c.n+" "+(c.sub||"")+" "+(c.f||"")+" "+(c.e||[]).map(e=>e[2]).join(" "));return norm(q).split(/\s+/).every(w=>h.includes(w))}
 
 /* Texto pegado → estrofas (misma regla que la importación de los Word) */
 function parsearTexto(txt){
   const bloques = txt.replace(/\r/g,"").split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
   const out=[];
+  const esNum=l=>/^\d+\.\s+/.test(l);
+  // Subtítulo: línea corta que no termina como un verso (punto, coma, exclamación…), o que termina en dos puntos
+  const esRotulo=l=>{ l=l.trim(); return l.length<=70 && (/:$/.test(l) || !/[.,;!?…»"”']$/.test(l)); };
   for(const b of bloques){
     if(/^am[eé]n[.!]?$/i.test(b) && out.length){ out[out.length-1][2]+="\n"+b; continue; }
-    const m=b.match(/^(\d+)\.\s+/);
-    if(m){out.push(["v",+m[1],b.slice(m[0].length)]);continue}
-    const ls=b.split("\n");
-    // Hasta tres subtítulos cortos antes de una estrofa numerada («Primera tabla», «Dios del Éxodo», «Doxología:»…)
-    const k=ls.findIndex(l=>/^\d+\.\s+/.test(l));
-    if(k>0 && k<=3 && ls.slice(0,k).every(l=>l.trim().length<=70)){
-      ls.slice(0,k).forEach(l=>out.push(["l",0,l.trim()]));
-      const r=ls.slice(k).join("\n"), m2=r.match(/^(\d+)\.\s+/);
-      out.push(["v",+m2[1],r.slice(m2[0].length)]);
-    } else out.push(["r",0,b]);
+    // Cada línea que empieza con «2. », «3. »… abre una estrofa nueva, aunque falte la línea en blanco
+    const trozos=[]; let cur=[];
+    b.split("\n").forEach(l=>{ if(esNum(l) && cur.length){ trozos.push(cur); cur=[]; } cur.push(l); });
+    trozos.push(cur);
+    trozos.forEach(t=>{
+      const m=t[0].match(/^(\d+)\.\s+/);
+      if(m){ out.push(["v",+m[1],[t[0].slice(m[0].length)].concat(t.slice(1)).join("\n")]); return; }
+      // Líneas sin número antes de la primera estrofa del bloque: subtítulos o estribillo
+      if(trozos.length>1 && t.length<=3 && t.every(esRotulo)) t.forEach(l=>out.push(["l",0,l.trim()]));
+      else out.push(["r",0,t.join("\n")]);
+    });
   }
   return out;
 }
@@ -370,15 +376,41 @@ function textoDe(c){return (c.e||[]).map(e=>e[0]==="v"?`${e[1]}. ${e[2]}`:e[2]).
 /* Codificación del repertorio en el enlace */
 function b64u(str){const bytes=new TextEncoder().encode(str);let bin="";bytes.forEach(b=>bin+=String.fromCharCode(b));return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
 function unb64u(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";const bin=atob(s);return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)))}
+/* Enlace compacto: #m=Título~AAMMDD~Parte+ids~…  (los enlaces viejos #r= siguen funcionando) */
+const PCOD={entrada:"E",penitencial:"P",kyrie:"K",gloria:"G",salmo:"S",aclamacion:"A",ofertorio:"O",santo:"T",cordero:"D",comunion:"C",accion:"H",mariano:"M",salida:"L"};
+const PDEC=Object.fromEntries(Object.entries(PCOD).map(([k,v])=>[v,k]));
+function txtEnc(x){ return encodeURIComponent(String(x||"")).replace(/[_~!'()*]/g,c=>"%"+c.charCodeAt(0).toString(16).toUpperCase()).replace(/%20/g,"_"); }
+function txtDec(x){ try{ return decodeURIComponent(String(x||"").replace(/_/g," ")); }catch{ return String(x||"").replace(/_/g," "); } }
 function repAEnlace(rep){
-  const c={t:rep.t,d:rep.d,p:rep.p.filter(p=>p.s.length||p.nota).map(p=>p.nota?[p.k,p.s,p.nota]:[p.k,p.s])};
-  const ids=new Set(rep.p.flatMap(p=>p.s));
+  const base=location.href.split("#")[0];
+  const partes=rep.p.filter(p=>p.s.length||p.nota);
+  const ids=new Set(partes.flatMap(p=>p.s));
+  const necesitaViejo = partes.some(p=>!PCOD[p.k]) || [...ids].some(id=>extra[id]||linkSongs[id]||!/^[a-z0-9-]+$/i.test(id));
+  if(!necesitaViejo){
+    const f=String(rep.d||"").match(/^\d\d(\d\d)-(\d\d)-(\d\d)$/);
+    const campos=[txtEnc(rep.t), f?f[1]+f[2]+f[3]:""]
+      .concat(partes.map(p=>PCOD[p.k]+p.s.join(".")+(p.nota?"!"+txtEnc(p.nota):"")));
+    return base+"#m="+campos.join("~");
+  }
+  const c={t:rep.t,d:rep.d,p:partes.map(p=>p.nota?[p.k,p.s,p.nota]:[p.k,p.s])};
   const x=[...ids].filter(id=>extra[id]||linkSongs[id]).map(id=>{const k=canto(id);return k&&{id:k.id,n:k.n,t:k.t,c:k.c,e:k.e}}).filter(Boolean);
   if(x.length) c.x=x;
-  return location.href.split("#")[0]+"#r="+b64u(JSON.stringify(c));
+  return base+"#r="+b64u(JSON.stringify(c));
 }
 function enlaceARep(){
   const src=(location.hash||"")+"&"+(location.search||"");
+  const mc=src.match(/[#&?]m=([^&]*)/);
+  if(mc){
+    try{
+      const campos=mc[1].split("~"); const f=(campos[1]||"").match(/^(\d\d)(\d\d)(\d\d)$/);
+      const p=campos.slice(2).filter(Boolean).map(x=>{
+        const k=PDEC[x[0]]; if(!k) return null;
+        const [ids,nota]=x.slice(1).split("!");
+        return {k, s:ids? ids.split(".").filter(Boolean) : [], nota: nota? txtDec(nota) : ""};
+      }).filter(Boolean);
+      return {t:txtDec(campos[0]), d:f?`20${f[1]}-${f[2]}-${f[3]}`:"", p};
+    }catch{ return null; }
+  }
   const m=src.match(/[#&?]r=([A-Za-z0-9_-]+)/); if(!m) return null;
   try{const c=JSON.parse(unb64u(m[1]));(c.x||[]).forEach(k=>{if(k&&k.id)linkSongs[String(k.id)]=k});return {t:c.t||"",d:c.d||"",p:(c.p||[]).map(x=>({k:x[0],s:(x[1]||[]).map(String),nota:x[2]||""}))}}catch{return null}
 }
@@ -555,7 +587,7 @@ function pintarSelector(){
   const fila=c=>filaCanto(c,"agregar").replace("<li>",`<li class="${ya.has(c.id)?"in":""}">`);
   const lista=(titulo,arr,nota="")=>arr.length?`<div class="grp">${titulo}${nota?` <small>${nota}</small>`:""}</div><ul class="lista pick">${arr.map(fila).join("")}</ul>`:"";
   // Columna de cantos (carpeta)
-  const all=cantos().filter(c=>busca(c,q));
+  const all=cantos().filter(c=>!c.greg&&busca(c,q));
   const sug=all.filter(c=>sugeridas(c).includes(parte.k)), resto=all.filter(c=>!sugeridas(c).includes(parte.k));
   const porCat={}; resto.forEach(c=>(porCat[c.c]=porCat[c.c]||[]).push(c));
   const colCantos = lista(`Sugeridos para ${esc(PARTE[parte.k].n)}`,sug)
@@ -565,11 +597,14 @@ function pintarSelector(){
   const gp=GPARTE[parte.k], kyr=gp? gregLista(gp).filter(c=>busca(c,q)) : [];
   const lib=gregLista("libres").filter(c=>busca(c,q));
   const lsug=lib.filter(c=>sugeridas(c).includes(parte.k)), lresto=lib.filter(c=>!sugeridas(c).includes(parte.k));
-  const colGreg = lista(`Kyriale · ${esc(GNOMBRE[gp]||"")}`,kyr)
+  const prop=gregPropios().filter(c=>busca(c,q));
+  const psug=prop.filter(c=>sugeridas(c).includes(parte.k)), presto=prop.filter(c=>!sugeridas(c).includes(parte.k));
+  const colGreg = lista("Propios de la schola",psug.concat(presto))
+    + lista(`Kyriale · ${esc(GNOMBRE[gp]||"")}`,kyr)
     + lista(kyr.length?"Himnos y antífonas":`Sugeridos para ${esc(PARTE[parte.k].n)}`,lsug)
     + lista(lsug.length||kyr.length?"Otros himnos y antífonas":"Himnos y antífonas",lresto,lsug.length?"también se pueden usar":"")
     || `<p class="empty">Ningún gregoriano coincide con la búsqueda.</p>`;
-  const nC=all.length, nG=kyr.length+lib.length;
+  const nC=all.length, nG=prop.length+kyr.length+lib.length;
   document.getElementById("picklist").innerHTML = `
     <div class="pcols-tabs" role="tablist">
       <button role="tab" data-act="pcol" data-v="cantos" aria-selected="${S._pcol==="cantos"}">Cantos <small>${nC}</small></button>
@@ -794,12 +829,18 @@ function gregIndice(){
   return _gIdx={idx,porParte,libres};
 }
 function cantoGreg(id){ return gregIndice().idx[String(id).slice(1)] || null; }
-function gregLista(parte){ const {porParte,libres}=gregIndice(); if(parte==="libres") return libres; return parte? porParte[parte] : [].concat(porParte.kyrie,porParte.gloria,porParte.sanctus,porParte.agnus,libres); }
+function gregLista(parte){
+  const {porParte,libres}=gregIndice();
+  const l = parte==="libres" ? libres : parte ? porParte[parte] : [].concat(porParte.kyrie,porParte.gloria,porParte.sanctus,porParte.agnus,libres);
+  return l.filter(c=>!OCULTOS.has(c.id));
+}
+function gregPropios(){ return cantos().filter(c=>c.greg); }
+function visibleG(gid){ return !OCULTOS.has("g"+gid); }
 
 /* Misa completa */
 function abrirMisas(){
   hoja("Ordinario gregoriano",`<p class="hint" style="margin:12px 0 4px">Completa Kyrie, Gloria, Sanctus y Agnus Dei. Después se puede cambiar cualquiera por separado.</p>
-    <ul class="lista pick">${GREG.misas.map((m,i)=>`<li><button data-act="misa" data-i="${i}">
+    <ul class="lista pick">${GREG.misas.map((m,i)=>[m,i]).filter(([m])=>["kyrie","gloria","sanctus","agnus"].some(p=>(m[p]||[]).some(([g])=>visibleG(g)))).map(([m,i])=>`<li><button data-act="misa" data-i="${i}">
       <span class="n">${esc(m.r)}</span>
       <span class="tt-wrap"><span class="t">${esc(m.r?("Misa "+m.r+(m.n?" · "+m.n:"")):m.n)}</span><span class="f">${esc(m.s||"")}</span></span>
       <span class="tag"><span class="add" aria-hidden="true">+</span></span></button></li>`).join("")}</ul>`);
@@ -807,7 +848,7 @@ function abrirMisas(){
 function aplicarMisa(i){
   const m=GREG.misas[i]; if(!m) return; const r=S.rep; const faltan=[];
   ["kyrie","gloria","sanctus","agnus"].forEach(p=>{
-    const k=GDESTINO[p], op=m[p]||[];
+    const k=GDESTINO[p], op=(m[p]||[]).filter(([g])=>visibleG(g));
     if(!op.length){ faltan.push(GNOMBRE[p]); return; }
     let parte=r.p.find(x=>x.k===k);
     if(!parte){ parte={k,s:[],nota:""}; r.p.push(parte); }
@@ -916,11 +957,50 @@ function slugCat(nombre){
   CATS[slug]={n, p:[]}; return slug;
 }
 function parteDe(txt){
-  const x=norm(txt).trim(); if(!x) return null;
+  let x=norm(txt).trim(); if(!x) return null;
+  x=({sanctus:"santo","agnus dei":"cordero de dios",agnus:"cordero de dios",introito:"entrada",communio:"comunion",offertorium:"ofertorio"})[x]||x;
   const p=PARTES.find(p=>norm(p.n)===x||p.k===x) || PARTES.find(p=>norm(p.n).startsWith(x)||x.startsWith(norm(p.n)));
   return p?p.k:null;
 }
-const CLAVES={numero:"numero",n:"numero",no:"numero",titulo:"titulo",categoria:"categoria",partes:"partes",partessugeridas:"partes",visible:"visible"};
+const CLAVES={numero:"numero",n:"numero",no:"numero",titulo:"titulo",categoria:"categoria",partes:"partes",partessugeridas:"partes",visible:"visible",tipo:"tipo",modo:"modo"};
+function normalizarGabc(cuerpo,modo){
+  let g=String(cuerpo||"").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').trim();
+  const md=String(modo||"").match(/[1-8]/);
+  if(g.indexOf("%%")<0) g="%%\n"+g;
+  if(md && !/^mode:/m.test(g.slice(0,g.indexOf("%%")))) g="mode:"+md[0]+";\n"+g;
+  return g+"\n";
+}
+function parseCSV(t){
+  const rows=[]; let row=[], f="", q=false;
+  for(let i=0;i<t.length;i++){
+    const ch=t[i];
+    if(q){ if(ch==='"'){ if(t[i+1]==='"'){f+='"';i++} else q=false } else f+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===','){ row.push(f); f=""; }
+    else if(ch==='\n'){ row.push(f); rows.push(row); row=[]; f=""; }
+    else if(ch!=='\r') f+=ch;
+  }
+  if(f!==""||row.length){ row.push(f); rows.push(row); }
+  return rows;
+}
+function leerPlanillas(planillas){
+  const ocultos=new Set(), avisos=[];
+  (planillas||[]).filter(p=>norm(p.nombre).startsWith("gregorianos")).forEach(p=>{
+    const filas=parseCSV(String(p.csv||"").replace(/^\uFEFF/,""));
+    const hi=filas.findIndex(r=>r.some(x=>norm(x).trim()==="codigo"));
+    if(hi<0){ avisos.push(`«${p.nombre}»: no tiene la columna «Código».`); return; }
+    const h=filas[hi].map(x=>norm(x).trim()), ic=h.indexOf("codigo"), iv=h.indexOf("visible");
+    if(iv<0){ avisos.push(`«${p.nombre}»: no tiene la columna «Visible».`); return; }
+    filas.slice(hi+1).forEach(r=>{ const c=(r[ic]||"").trim(); if(c && ["no","n","0"].includes(norm(r[iv]||"").trim())) ocultos.add(c); });
+  });
+  return {ocultos, avisos};
+}
+function registrarGregorianos(lista){
+  (lista||[]).forEach(c=>{
+    if(!c.greg || !c.gabc) return;
+    if(GREG.gabc[c.gid]!==c.gabc){ GREG.gabc[c.gid]=c.gabc; [..._svgCache.keys()].forEach(k=>{ if(k.startsWith(c.gid+"@")) _svgCache.delete(k); }); }
+  });
+}
 function leerArchivo(nombre,texto){
   const lineas=String(texto||"").replace(/^\uFEFF/,"").replace(/\r\n?/g,"\n").replace(/\u000b/g,"\n").split("\n");
   const datos={}; let i=0;
@@ -950,13 +1030,17 @@ function desdeArchivos(lista){
     if(!tit){ avisos.push(`${ref}: falta el título.`); continue; }
     if(!cuerpo) avisos.push(`${ref}: no tiene letra cargada.`);
     vistos.set(n,a.nombre);
-    const c={id:String(n), n, t:tit, c:slugCat(datos.categoria||"")||"sin-categoria", e:parsearTexto(cuerpo)};
+    const esGreg=norm(datos.tipo||"").startsWith("gregor");
+    const c=esGreg
+      ? {id:String(n), n, t:tit, c:slugCat(datos.categoria||"")||"gregoriano-propios", e:[], greg:true, propio:true, gid:"d"+n, gabc:normalizarGabc(cuerpo,datos.modo), sub:"", f:""}
+      : {id:String(n), n, t:tit, c:slugCat(datos.categoria||"")||"sin-categoria", e:parsearTexto(cuerpo)};
     if(c.c==="sin-categoria"&&!CATS["sin-categoria"]) CATS["sin-categoria"]={n:"Sin categoría",p:[]};
-    if(!datos.categoria) avisos.push(`${ref}: falta la categoría.`);
+    if(!datos.categoria && !esGreg) avisos.push(`${ref}: falta la categoría.`);
+    if(esGreg && !/\([^)]*\)/.test(cuerpo)) avisos.push(`${ref}: está marcado como gregoriano pero el cuerpo no parece GABC.`);
     const keys=[]; (datos.partes||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(x=>{const k=parteDe(x); if(k) keys.push(k); else avisos.push(`${ref}: no se reconoce la parte «${x}».`)});
     if(keys.length) c.p=keys;
     if(["no","n","0","oculto"].includes(norm(datos.visible||""))) c.oculto=true;
-    if(c.e.length && !c.e.some(x=>x[0]==="v") && c.e.length>1) avisos.push(`${ref}: ninguna estrofa tiene número; revisar que no se haya convertido en lista automática.`);
+    if(!esGreg && c.e.length && !c.e.some(x=>x[0]==="v") && c.e.length>1) avisos.push(`${ref}: ninguna estrofa tiene número; revisar que no se haya convertido en lista automática.`);
     cantos.push(c);
   }
   return {cantos, avisos};
@@ -969,10 +1053,12 @@ async function cargarCantoral(){
     if(!r.ok) return false;
     const data=await r.json();
     const {cantos:lista,avisos}=desdeArchivos(data.archivos||[]);
-    AVISOS=[...(data.errores||[]),...avisos];
+    const pl=leerPlanillas(data.planillas);
+    AVISOS=[...(data.errores||[]),...avisos,...pl.avisos];
     if(!lista.length) return false;
-    BASE=lista; _cache=null;
-    LS.set("cache",{c:lista,a:AVISOS,cats:CATS,t:Date.now()});
+    OCULTOS=pl.ocultos;
+    BASE=lista; registrarGregorianos(BASE); _cache=null;
+    LS.set("cache",{c:lista,a:AVISOS,cats:CATS,o:[...OCULTOS],t:Date.now()});
     return true;
   }catch{ return false; }
 }
@@ -986,7 +1072,7 @@ function refrescar(){
   try{ localStorage.removeItem("cantoral:locales"); localStorage.removeItem("cantoral:director"); }catch{}
   // 1) La última versión guardada en este dispositivo, para abrir al instante
   const cache=LS.get("cache",null);
-  if(cache && Array.isArray(cache.c) && cache.c.length){ Object.assign(CATS,cache.cats||{}); BASE=cache.c; AVISOS=cache.a||[]; }
+  if(cache && Array.isArray(cache.c) && cache.c.length){ Object.assign(CATS,cache.cats||{}); BASE=cache.c; AVISOS=cache.a||[]; OCULTOS=new Set(cache.o||[]); registrarGregorianos(BASE); }
   const rep=enlaceARep(); if(rep){S.shared=rep;S.mode="read"}
   // 2) La planilla: si no hay nada guardado, se espera; si lo hay, se actualiza después
   render();
