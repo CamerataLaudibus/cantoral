@@ -149,6 +149,10 @@ ul.lista .tt-wrap{min-width:0}
 .canto .obs{font-style:italic;color:var(--rubric);font-size:.8em;margin:-.4em 0 1em}
 .canto .b{margin:0 0 1em;white-space:pre-line;position:relative}
 .canto .b.v{padding-left:1.8em}
+.canto .gl{color:var(--glosa);font-style:italic;font-size:.82em}
+.canto .b.r .gl{font-style:italic}
+:root[data-trad="no"] .canto .gl{display:none}
+.canto .enc .trad-btn{margin-left:auto;align-self:flex-start;margin-top:.4em}
 .canto .b.v .k{position:absolute;left:0;top:0;color:var(--rubric);font-size:.85em;padding-top:.12em}
 .canto .b.r{padding-left:1.8em;font-style:italic}
 .canto .b.r .k{position:absolute;left:0;top:0;color:var(--rubric);font-style:normal}
@@ -410,7 +414,7 @@ function canto(id){id=String(id);if(id[0]==="g")return cantoGreg(id);return cant
 function sugeridas(c){ if(c.p&&c.p.length) return c.p; if(c.temas) return []; return (CATS[c.c]?.p)||[]; }
 function catNombre(k){return CATS[k]?.n || k || "Sin categoría"}
 function rotulo(c){return c.greg? c.t+(c.sub?" · "+c.sub:"") : c.n+". "+c.t}
-function primerVerso(c){if(c.greg&&c.propio)return "Gregoriano propio";if(c.greg)return [c.sub,c.f].filter(Boolean).join(" · ");const e=(c.e||[]).find(x=>x[0]!=="l");return e?e[2].split("\n")[0]:""}
+function primerVerso(c){if(c.greg&&c.propio)return "Gregoriano propio";if(c.greg)return [c.sub,c.f].filter(Boolean).join(" · ");const e=(c.e||[]).find(x=>x[0]!=="l");return e?e[2].split("\n")[0].replace(/^\s*~\s*/,""):""}
 function busca(c,q){if(!q) return true;const h=norm(c.t+" "+c.n+" "+(c.sub||"")+" "+(c.f||"")+" "+(c.e||[]).map(e=>e[2]).join(" "));return norm(q).split(/\s+/).every(w=>h.includes(w))}
 
 /* Texto pegado → estrofas (misma regla que la importación de los Word) */
@@ -608,6 +612,12 @@ function filaCanto(c,act,extraAttr=""){
 }
 
 /* ===================== Texto del canto ===================== */
+// Una línea que empieza con «~» es la traducción literal de la línea anterior
+function tieneGlosa(c){ return (c.e||[]).some(x=>/(^|\n)\s*~/.test(x[2])); }
+function txtGlosa(t){
+  return String(t).split("\n").map((l,i)=>{ const m=l.match(/^\s*~\s*(.*)$/);
+    return m ? `<span class="gl">${i?"\n":""}${esc(m[1])}</span>` : (i?"\n":"")+esc(l); }).join("");
+}
 function htmlCanto(c,nota){
   if(!c) return `<p class="empty">No se encontró este canto en el cantoral.</p>`;
   if(c.greg) return `<article class="canto">
@@ -630,11 +640,11 @@ function htmlCanto(c,nota){
   }
   return `<article class="canto">
     <div class="enc"><span class="versal">${esc(c.n)}</span>
-      <div><h1>${esc(c.t)}</h1><div class="cat">${esc(temasTexto(c))}</div></div></div>
+      <div><h1>${esc(c.t)}</h1><div class="cat">${esc(temasTexto(c))}</div></div>${tieneGlosa(c)?`<button class="trad-btn" data-act="trad" aria-pressed="${!!S.trad}">Traducción</button>`:""}</div>
     ${nota?`<p class="obs">${esc(nota)}</p>`:""}
-    ${e.map(x=> x[0]==="v" ? `<p class="b v"><span class="k">${x[1]}.</span>${esc(x[2])}</p>`
-             : x[0]==="r" ? `<p class="b r"><span class="k" aria-label="Estribillo">℟.</span>${esc(x[2])}</p>`
-             : `<p class="b l">${esc(x[2])}</p>`).join("")}
+    ${e.map(x=> x[0]==="v" ? `<p class="b v"><span class="k">${x[1]}.</span>${txtGlosa(x[2])}</p>`
+             : x[0]==="r" ? `<p class="b r"><span class="k" aria-label="Estribillo">℟.</span>${txtGlosa(x[2])}</p>`
+             : `<p class="b l">${txtGlosa(x[2])}</p>`).join("")}
   </article>`;
 }
 
@@ -678,7 +688,7 @@ function pintarSelector(){
       const s=arr.filter(va), o=arr.filter(c=>!va(c));
       return `<div class="grp grp-t">${esc(nombre(k))}${k===marca?` <small>tiempo de esta Misa</small>`:""}</div>`
         + (s.length?`<ul class="lista pick">${s.map(fila).join("")}</ul>`:"")
-        + (o.length?`<div class="grp sub">Otras partes</div><ul class="lista pick">${o.map(fila).join("")}</ul>`:"");
+        + (o.length?`<div class="grp sub">También se puede usar</div><ul class="lista pick">${o.map(fila).join("")}</ul>`:"");
     }).join("");
   const tHoy=tiempoDeFecha(S.rep.d);
   const clT=TIEMPOS.map(t=>t[0]); if(tHoy){ clT.splice(clT.indexOf(tHoy),1); clT.unshift(tHoy); }
@@ -846,7 +856,7 @@ document.addEventListener("click",async e=>{
     case "ui": { const orden=["g","m","c"], nom={c:"Compacto",m:"Mediano",g:"Grande"};
       const cur=document.documentElement.dataset.ui || (matchMedia("(max-width:640px)").matches?"m":"g");
       const nx=orden[(orden.indexOf(cur)+1)%3]; document.documentElement.dataset.ui=nx; LS.set("ui",nx); toast("Tamaño de la letra: "+nom[nx]); break; }
-    case "trad": { S.trad= d.v!=null ? d.v==="1" : !S.trad; LS.set("trad",S.trad); toast(S.trad?"Traducción visible.":"Traducción oculta.");
+    case "trad": { S.trad= d.v!=null ? d.v==="1" : !S.trad; LS.set("trad",S.trad); document.documentElement.dataset.trad=S.trad?"si":"no"; toast(S.trad?"Traducción visible.":"Traducción oculta.");
       if(S._enCoro) pintarCoro(false); else { $layer.querySelectorAll(".trad-btn").forEach(b=>b.setAttribute("aria-pressed",S.trad)); $layer.querySelectorAll(".partitura[data-g]").forEach(e=>e.dataset.w=""); pintarPartituras($layer,1); } break; }
     case "fondo": case "cerrar": cerrarCapa(); break;
     case "cat": S.cat=d.c; render(); break;
@@ -1368,6 +1378,7 @@ function refrescar(){
 (async function(){
   const t=LS.get("tema",null); if(t) document.documentElement.dataset.theme=t;
   const ui=LS.get("ui",null); if(ui) document.documentElement.dataset.ui=ui;
+  document.documentElement.dataset.trad=S.trad?"si":"no";
   try{ localStorage.removeItem("cantoral:locales"); localStorage.removeItem("cantoral:director"); }catch{}
   // 1) La última versión guardada en este dispositivo, para abrir al instante
   const cache=LS.get("cache",null);
