@@ -149,7 +149,8 @@ ul.lista .tt-wrap{min-width:0}
 .canto .obs{font-style:italic;color:var(--rubric);font-size:.8em;margin:-.4em 0 1em}
 .canto .b{margin:0 0 1em;white-space:pre-line;position:relative}
 .canto .b.v{padding-left:1.8em}
-.canto .gl{color:var(--glosa);font-style:italic;font-size:.82em}
+.canto .gl{display:block;color:var(--glosa);font-style:italic;font-size:.82em;line-height:1.15;margin:-.05em 0 .4em}
+.canto .ln{display:block}
 .canto .b.r .gl{font-style:italic}
 :root[data-trad="no"] .canto .gl{display:none}
 .canto .enc .trad-btn{margin-left:auto;align-self:flex-start;margin-top:.4em}
@@ -615,8 +616,11 @@ function filaCanto(c,act,extraAttr=""){
 // Una línea que empieza con «~» es la traducción literal de la línea anterior
 function tieneGlosa(c){ return (c.e||[]).some(x=>/(^|\n)\s*~/.test(x[2])); }
 function txtGlosa(t){
-  return String(t).split("\n").map((l,i)=>{ const m=l.match(/^\s*~\s*(.*)$/);
-    return m ? `<span class="gl">${i?"\n":""}${esc(m[1])}</span>` : (i?"\n":"")+esc(l); }).join("");
+  const ls=String(t).split("\n");
+  if(!ls.some(l=>/^\s*~/.test(l))) return esc(t);
+  // Con traducción: cada verso en su propia línea y la traducción pegada debajo
+  return ls.map(l=>{ const m=l.match(/^\s*~\s*(.*)$/);
+    return m ? `<span class="gl">${esc(m[1])}</span>` : `<span class="ln">${esc(l)}</span>`; }).join("");
 }
 function htmlCanto(c,nota){
   if(!c) return `<p class="empty">No se encontró este canto en el cantoral.</p>`;
