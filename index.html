@@ -861,7 +861,7 @@ function pintarCoro(scrollTop,entra){
   // Barras: se esconden al bajar, vuelven al subir o con un toque
   const ver=v=>{ S._coro.oculto=!v; coro.classList.toggle("oculto",!v); };
   let yAnt=b.scrollTop;
-  b.addEventListener("scroll",()=>{ const y=b.scrollTop; if(y>yAnt+8 && y>50) ver(false); else if(y<yAnt-8) ver(true); yAnt=y; },{passive:true});
+  b.addEventListener("scroll",()=>{ const y=b.scrollTop; if(y>yAnt+2 && y>16) ver(false); else if(y<yAnt-6) ver(true); yAnt=y; },{passive:true});
   b.addEventListener("click",e=>{ if(e.target.closest("button,a,input,select,textarea")) return; if(window.getSelection&&String(window.getSelection())) return; ver(coro.classList.contains("oculto")); });
   // Deslizar hacia los costados para cambiar de canto (la página sigue al dedo)
   let x0=null,y0=null,dx=0,horiz=null;
@@ -1054,6 +1054,17 @@ function insertarTraduccion(gabc, pares){
   return cab+out;
 }
 // Después de dibujar: evita que las traducciones se encimen o se salgan del renglón
+// Todos los renglones de una pieza a la misma distancia (con o sin letra o traducción debajo)
+function uniformarRenglones(svg){
+  if(!svg) return; const L=[...svg.querySelectorAll("g.chantLine")]; if(L.length<2) return;
+  const inf=L.map(g=>{ const m=(g.getAttribute("transform")||"").match(/translate\(([-\d.e]+),([-\d.e]+)\)/); let bb; try{ bb=g.getBBox(); }catch(e){ return null; }
+    return {g,x:m?+m[1]:0,y:m?+m[2]:0,top:bb.y,bot:bb.y+bb.height}; });
+  if(inf.some(i=>!i)) return;
+  const maxBot=Math.max(...inf.map(i=>i.bot)), minTop=Math.min(...inf.slice(1).map(i=>i.top));
+  const paso=maxBot-minTop+20; let y=inf[0].y;
+  inf.forEach((it,k)=>{ if(k) y+=paso; it.g.setAttribute("transform",`translate(${it.x},${y})`); });
+  const vb=svg.viewBox&&svg.viewBox.baseVal; if(vb) svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.width} ${y+maxBot+10}`);
+}
 function ajustarTraducciones(svg){
   if(!svg || !svg.viewBox || !svg.viewBox.baseVal) return;
   const vb=svg.viewBox.baseVal, cr=svg.getBoundingClientRect(); if(!cr.width) return;
@@ -1193,7 +1204,7 @@ function contextoExsurge(){
   ctxt.minLyricWordSpacing*=0.7; ctxt.accidentalSpaceMultiplier=1.5;
   ctxt.setRubricColor('var(--rubric, #981914)');
   ctxt.specialCharMap={"℣":"℣","℟":"℟","V":"℣","R":"℟","+":"+","*":"*"};
-  ctxt.specialCharProperties["font-family"]="'Cantoral Signos', 'Crimson Pro', serif";
+  ctxt.specialCharProperties["font-family"]="'Cantoral Signos', 'Crimson Pro', serif"; ctxt.specialCharProperties["font-size"]="80%";
   return ctxt;
 }
 const _svgCache=new Map(), _enCurso=new Map();
@@ -1230,7 +1241,7 @@ function pintarPartituras(raiz, zoom){
   return Promise.all(els.map(el=>{
     const gid=el.dataset.g, ancho=anchoMaqueta(el,zoom);
     el.dataset.w=ancho;
-    return svgPartitura(gid,ancho).then(html=>{ if(el.isConnected && el.dataset.w==String(ancho)){ el.innerHTML=html; if(S.trad && traduccionDe(gid)) ajustarTraducciones(el.querySelector("svg")); } })
+    return svgPartitura(gid,ancho).then(html=>{ if(el.isConnected && el.dataset.w==String(ancho)){ el.innerHTML=html; uniformarRenglones(el.querySelector("svg")); if(S.trad && traduccionDe(gid)) ajustarTraducciones(el.querySelector("svg")); } })
       .catch(()=>{ if(el.isConnected) el.innerHTML=`<p class="cargando">No se pudo dibujar la partitura.</p>`; });
   }));
 }
