@@ -852,7 +852,7 @@ function pintarCoro(scrollTop,entra){
         <div class="row"><span>Repetir el estribillo tras cada estrofa</span>
           <span class="seg"><button data-act="coroR" data-v="0" aria-pressed="${!S.coroR}">No</button><button data-act="coroR" data-v="1" aria-pressed="${S.coroR}">Sí</button></span></div>
       </div></div>`:""}
-    ${S._coro.pista?`<div class="pista" aria-hidden="true"><span>‹</span>Deslizá para cambiar de canto<span>›</span></div>`:""}
+    ${S._coro.pista?`<div class="pista" aria-hidden="true"><span>‹</span>Desliza para cambiar de canto<span>›</span></div>`:""}
   </div>`;
   const coro=$layer.querySelector(".coro"), b=document.getElementById("coroB"), pag=b.querySelector(".coro-pag");
   b.style.setProperty("--lec",(S.lec*16)+"px");
