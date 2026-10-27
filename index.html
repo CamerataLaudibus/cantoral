@@ -1201,12 +1201,37 @@ function contextoExsurge(){
   ctxt.negativeFillColor='var(--exsurge-negative-fill, #fff)';
   ctxt.setFont("'Cantoral Signos', 'Crimson Pro', Georgia, serif", 19.2/0.9*1.06);
   ctxt.spaceBetweenSystems=0; ctxt.textStyles.dropCap.size=64; ctxt.textStyles.annotation.size=12.8;
-  ctxt.minLyricWordSpacing*=0.7; ctxt.accidentalSpaceMultiplier=1.5;
+  ctxt.minLyricWordSpacing*=0.7; ctxt.interSyllabicMultiplier=ESP_SILABA; ctxt.accidentalSpaceMultiplier=1.5;
   ctxt.setRubricColor('var(--rubric, #981914)');
   ctxt.specialCharMap={"℣":"℣","℟":"℟","V":"℣","R":"℟","+":"+","*":"*"};
   ctxt.specialCharProperties["font-family"]="'Cantoral Signos', 'Crimson Pro', serif"; ctxt.specialCharProperties["font-size"]="80%";
   return ctxt;
 }
+// Espaciado como en las plantillas de InDesign: entre sílabas el doble que Exsurge (≈ «====» de Caeciliae),
+// antes y después de las pausas la mitad de eso («==»). Las notas de un melisma no cambian.
+const ESP_SILABA=5, ESP_PAUSA=2.5;
+function espaciarSilabas(maps){
+  const ns=[]; maps.forEach(m=>(m.notations||[]).forEach(n=>ns.push(n)));
+  const pausa=c=>c.intraNeumeSpacing*ESP_PAUSA;
+  ns.forEach((n,i)=>{
+    if(!n.isDivider) return;
+    if(n.trailingSpace && n.trailingSpace.isDefault) n.trailingSpace=pausa;
+    for(let k=i-1;k>=0;k--){ const a=ns[k]; if(a.isNeume||a.isDivider){ if(a.trailingSpace&&a.trailingSpace.isDefault) a.trailingSpace=pausa; break; } if(a.hasLyrics&&a.hasLyrics()) break; }
+  });
+  // Sílabas de 1 a 3 notas: la nota queda centrada sobre la vocal; los melismas siguen alineados a la izquierda
+  for(let i=0;i<ns.length;i++){
+    const n=ns[i]; if(!n.isNeume || !n.hasLyrics()) continue;
+    let notas=0, j=i;
+    do{ const x=ns[j]; if(x.isNeume) notas+=(x.notes?x.notes.length:1); j++; }
+    while(j<ns.length && !(ns[j].hasLyrics&&ns[j].hasLyrics()) && !ns[j].isDivider && (ns[j].isNeume||ns[j].isAccidental));
+    if(notas<=3 && j===i+1) n._centrar=true;
+  }
+}
+(function(){
+  const P=window.exsurge&&exsurge.ChantNotationElement&&exsurge.ChantNotationElement.prototype; if(!P||P._centrado) return;
+  const fin=P.finishLayout; P._centrado=true;
+  P.finishLayout=function(c){ fin.call(this,c); if(this._centrar && this.lyrics) this.lyrics.forEach(l=>{ l.bounds.x=this.bounds.width/2-l.origin.x; }); };
+})();
 const _svgCache=new Map(), _enCurso=new Map();
 let _fuentes=null;
 function fuentesListas(){ if(!_fuentes) _fuentes=(document.fonts&&document.fonts.load? Promise.all([document.fonts.load("400 20px 'Crimson Pro'"),document.fonts.load("italic 400 20px 'Crimson Pro'"),document.fonts.load("20px 'Cantoral Signos'","*℣℟")]).catch(()=>{}) : Promise.resolve()).then(()=>new Promise(r=>setTimeout(r,0))); return _fuentes; }
@@ -1220,7 +1245,8 @@ function svgPartitura(gid, ancho){
       let g=GREG.gabc[gid]; if(!g || !window.exsurge) return mal(new Error("sin partitura"));
       if(trad) g=insertarTraduccion(g,trad);
       const ctxt=contextoExsurge();
-      const score=new exsurge.ChantScore(ctxt, exsurge.Gabc.createMappingsFromSource(ctxt, gabcParaExsurge(gabcCuerpo(g))), true);
+      const maps=exsurge.Gabc.createMappingsFromSource(ctxt, gabcParaExsurge(gabcCuerpo(g))); espaciarSilabas(maps);
+      const score=new exsurge.ChantScore(ctxt, maps, true);
       const modo=gabcModo(g); if(modo) score.annotation=new exsurge.Annotations(ctxt,'%'+ROMANO_MODO[modo]+'%');
       ctxt.width=ancho;
       score.performLayoutAsync(ctxt,()=>score.layoutChantLines(ctxt,ancho,()=>{
