@@ -96,7 +96,8 @@ label.lbl{display:block;font-weight:500;margin:14px 0 6px}
 
 /* Repertorio (builder) */
 .rep-head{display:grid;gap:10px;margin:22px 0 8px}
-.rep-title{font-family:var(--serif);font-size:1.6rem;border:0;border-bottom:1px solid var(--line);background:none;padding:6px 0;width:100%}
+.rep-title{font-family:var(--serif);font-size:1.15rem;border:0;border-bottom:1px solid var(--line);background:none;padding:4px 0;width:100%}
+.rep-nombrar{justify-self:start;border:0;background:none;color:var(--muted);font:inherit;font-size:.92rem;padding:2px 0;cursor:pointer}
 .rep-title::placeholder{color:var(--muted);opacity:.7}
 .rep-date{border:0;background:none;color:var(--muted);padding:0}
 ol.partes{list-style:none;margin:10px 0 0;padding:0;counter-reset:p}
@@ -547,7 +548,6 @@ function renderLectura(rep, porEnlace){
   const items = secuencia(rep);
   $main.innerHTML = `
   <section class="hoy">
-    <div class="fecha">${esc(fechaLarga(rep.d))}</div>
     <h2>${esc(rep.t || "Repertorio de la Misa")}</h2>
     ${items.length? `<ol class="orden">${items.map((it,i)=>`
       <li data-act="cantar" data-i="${i}" tabindex="0">
@@ -563,12 +563,12 @@ function renderLectura(rep, porEnlace){
 }
 
 function renderEditor(){
-  const r=S.rep;
+  const r=S.rep; r.d=hoyISO();   // sin campo de fecha: el repertorio toma la fecha del día en que se arma
   const libres = PARTES.filter(p=>!r.p.some(x=>x.k===p.k));
   $main.innerHTML = `
   <div class="rep-head">
-    <input class="rep-title" data-in="t" placeholder="Nombre de la celebración" value="${esc(r.t)}" aria-label="Nombre de la celebración">
-    <input class="rep-date" type="date" data-in="d" value="${esc(r.d)}" aria-label="Fecha">
+    ${r.t||S._nombre?`<input class="rep-title" data-in="t" placeholder="Nombre de la celebración" value="${esc(r.t)}" aria-label="Nombre de la celebración">`
+      :`<button class="rep-nombrar" data-act="nombrar">+ Ponerle un nombre</button>`}
     <button class="misa-btn" data-act="elegirMisa"><b>Ordinario gregoriano</b><span>Elegir una Misa completa del Kyriale: Kyrie, Gloria, Sanctus y Agnus Dei</span></button>
     <button class="misa-btn" data-act="elegirPropio"><b>Propio de una Misa</b><span>Introito, Gradual, Alleluia o Tracto, Ofertorio y Comunión del día</span></button>
   </div>
@@ -773,11 +773,11 @@ function pintarSelectorAlleluia(q,fila){
   const nAl=todos.filter(a=>a.tipo==="al").length, nTr=todos.filter(a=>a.tipo==="tr").length;
   if(!["al","tr"].includes(S._pal)) S._pal="al";
   // Los del día, según la fecha del repertorio
-  const hoy=propiosDelDia(S.rep.d), dia=[];
+  const hoy=propiosDelDia(hoyISO()), dia=[];
   hoy.forEach(m=>m.pz.forEach(([cod,gid])=>{ if((cod==="al"||cod==="tr")){ const c=cantoGreg("g"+gid); if(c&&!dia.includes(c)&&(!q||busca(c,q))) dia.push(c); } }));
   const tab=(v,t,n)=>`<button role="tab" data-act="pal" data-v="${v}" aria-selected="${S._pal===v}">${t} <small>${n}</small></button>`;
   document.getElementById("picklist").innerHTML =
-    (dia.length?`<div class="grp">Para el ${esc(fechaLarga(S.rep.d))}</div><ul class="lista pick">${dia.map(fila).join("")}</ul>`:"")
+    (dia.length?`<div class="grp">Para hoy</div><ul class="lista pick">${dia.map(fila).join("")}</ul>`:"")
     + `<div class="pcols-tabs" role="tablist">${tab("al","Alleluias",nAl)}${tab("tr","Tractos",nTr)}</div>`
     + `<section class="pcol">${listaAlleluias(todos.filter(a=>a.tipo===S._pal),q,fila) || `<p class="empty">Ninguno coincide con la búsqueda.</p>`}</section>`;
 }
@@ -952,12 +952,13 @@ document.addEventListener("click",async e=>{
     case "subir": { const s=r.p[+d.pi].s, i=+d.si; [s[i-1],s[i]]=[s[i],s[i-1]]; guardarBorrador(); render(); break; }
     case "quitarParte": r.p.splice(+d.pi,1); guardarBorrador(); render(); break;
     case "elegirMisa": abrirMisas(); break;
+    case "nombrar": S._nombre=true; render(); setTimeout(()=>document.querySelector(".rep-title")?.focus(),0); break;
     case "elegirPropio": abrirPropios(); break;
     case "propio": aplicarPropio(d.k); break;
     case "pcol": S._pcol=d.v; pintarSelector(); break;
     case "pal": S._pal=d.v; pintarSelector(); break;
     case "misa": aplicarMisa(+d.i); break;
-    case "vaciar": if(confirm("¿Borrar este repertorio y empezar uno nuevo?")){S.rep=nuevoRep();guardarBorrador();render()} break;
+    case "vaciar": if(confirm("¿Borrar este repertorio y empezar uno nuevo?")){S.rep=nuevoRep();S._nombre=false;guardarBorrador();render()} break;
     case "cantar": { const rep = S.mode==="edit" || !S.shared ? S.rep : S.shared; abrirCoro(rep,+d.i||0); break; }
     case "mover": moverCoro(+d.d); break;
     case "ir": S._coro.i=+d.i; S._coro.idx=false; pintarCoro(true); break;
@@ -974,8 +975,7 @@ document.addEventListener("click",async e=>{
       // El enlace va dentro del texto: algunas apps (Telegram, WhatsApp) descartan el campo url
       const link=document.getElementById("lnk").value;
       const titulo=S.rep.t||"Repertorio de la Misa";
-      const fecha=S.rep.d?fechaLarga(S.rep.d):"";
-      const texto=titulo+(fecha?"\n"+fecha.charAt(0).toUpperCase()+fecha.slice(1):"")+"\n\n"+link;
+      const texto=titulo+"\n\n"+link;
       try{ await navigator.share({text:texto}); }
       catch(err){ if(err && err.name!=="AbortError"){ try{ await navigator.clipboard.writeText(link); toast("No se pudo abrir el menú para compartir. El enlace quedó copiado."); }catch{ toast("No se pudo abrir el menú para compartir. Usa «Copiar enlace»."); } } }
       break; }
@@ -1190,11 +1190,10 @@ function itemPropio(m){
       <span class="tag"><span class="add" aria-hidden="true">+</span></span></button></li>`;
 }
 function abrirPropios(){
-  const r=S.rep, hoy=propiosDelDia(r.d);
-  const fecha=r.d?fechaLarga(r.d):"";
+  const hoy=propiosDelDia(hoyISO());
   hoja("Propio de una Misa",`
-    ${hoy.length?`<div class="grp">Para el ${esc(fecha)}</div><ul class="lista pick">${hoy.map(itemPropio).join("")}</ul>`
-      :`<p class="hint" style="margin:12px 0 4px">${r.d?`No hay una Misa cargada para el ${esc(fecha)}. Elígela de la lista.`:"Pon la fecha del repertorio para ver la Misa del día."}</p>`}
+    ${hoy.length?`<div class="grp">Para hoy</div><ul class="lista pick">${hoy.map(itemPropio).join("")}</ul>`
+      :`<p class="hint" style="margin:12px 0 4px">No hay una Misa cargada para hoy. Elígela de la lista.</p>`}
     <div class="search" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input class="field" type="search" id="prq" placeholder="Buscar Misa o pieza (ej. Gaudete, Requiem)" aria-label="Buscar Misa"></div>
     <div id="prlista"></div>`);
