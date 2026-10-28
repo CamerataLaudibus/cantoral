@@ -1279,20 +1279,6 @@ function espaciarSilabas(maps){
     for(let k=i-1;k>=0;k--){ const a=ns[k]; if(a.isNeume||a.isDivider){ if(a.trailingSpace&&a.trailingSpace.isDefault) a.trailingSpace=pausa; break; } if(a.hasLyrics&&a.hasLyrics()) break; }
   });
 }
-// Sílabas de 1 a 3 notas (aunque estén en neumas separados): el grupo de notas queda centrado sobre la vocal.
-// Los melismas siguen con la vocal bajo la primera nota.
-function centrarSilabas(maps,c){
-  const ns=[]; maps.forEach(m=>(m.notations||[]).forEach(n=>ns.push(n)));
-  const conLetra=x=>x.hasLyrics&&x.hasLyrics();
-  for(let i=0;i<ns.length;i++){
-    const n=ns[i]; if(!n.isNeume || !conLetra(n)) continue;
-    const grupo=[n]; let j=i+1;
-    while(j<ns.length && ns[j].isNeume && !conLetra(ns[j])) grupo.push(ns[j++]);
-    const notas=grupo.reduce((s,x)=>s+(x.notes?x.notes.length:1),0); if(notas>3) continue;
-    let w=0; grupo.forEach((x,k)=>{ w+=x.bounds.width; if(k<grupo.length-1){ const t=x.calculatedTrailingSpace; w+=(typeof t==="number"&&t>0)?t:c.intraNeumeSpacing; } });
-    n.lyrics.forEach(l=>{ l.bounds.x=w/2-l.origin.x; });
-  }
-}
 const _svgCache=new Map(), _enCurso=new Map();
 let _fuentes=null;
 function fuentesListas(){ if(!_fuentes) _fuentes=(document.fonts&&document.fonts.load? Promise.all([document.fonts.load("400 20px 'Crimson Pro'"),document.fonts.load("italic 400 20px 'Crimson Pro'"),document.fonts.load("20px 'Cantoral Signos'","*℣℟")]).catch(()=>{}) : Promise.resolve()).then(()=>new Promise(r=>setTimeout(r,0))); return _fuentes; }
@@ -1310,13 +1296,13 @@ function svgPartitura(gid, ancho){
       const score=new exsurge.ChantScore(ctxt, maps, true);
       const modo=gabcModo(g); if(modo) score.annotation=new exsurge.Annotations(ctxt,'%'+ROMANO_MODO[modo]+'%');
       ctxt.width=ancho;
-      score.performLayoutAsync(ctxt,()=>{ centrarSilabas(maps,ctxt); score.layoutChantLines(ctxt,ancho,()=>{
+      score.performLayoutAsync(ctxt,()=>score.layoutChantLines(ctxt,ancho,()=>{
         const svg=score.createSvgNode(ctxt);
         const w=parseFloat(svg.getAttribute("width")), h=parseFloat(svg.getAttribute("height"));
         if(!svg.getAttribute("viewBox") && w && h) svg.setAttribute("viewBox","0 0 "+w+" "+h);
         svg.removeAttribute("width"); svg.removeAttribute("height");
         const html=svg.outerHTML; _svgCache.set(clave,html); _enCurso.delete(clave); ok(html);
-      }); });
+      }));
     }catch(err){ _enCurso.delete(clave); mal(err); }
   }));
   _enCurso.set(clave,p); return p;
