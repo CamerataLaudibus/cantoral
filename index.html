@@ -395,7 +395,7 @@ function tiempoDeFecha(iso){
   if(dd>=48 && dd<=55) return "pentecostes";
   return null;
 }
-const DEFAULT_PARTS = ["entrada","aclamacion","ofertorio","comunion","accion","salida"];
+const DEFAULT_PARTS = ["entrada","aclamacion","credo","ofertorio","comunion","accion","salida"];
 
 
 /* ===================== Estado ===================== */
@@ -425,7 +425,7 @@ let S = {
   coroR: LS.get("coroR", false),
   trad: LS.get("trad", true)
 };
-// Las partes fijas (Entrada, Alleluia, Ofertorio, Comunión, Postcomunión, Salida) siempre están en el repertorio que se edita,
+// Las partes fijas (Entrada, Alleluia, Credo, Ofertorio, Comunión, Postcomunión, Salida) siempre están en el repertorio que se edita,
 // también en los guardados antes de que se agregara alguna de ellas
 function completarPartes(r){
   if(!r||!Array.isArray(r.p)) return r;
@@ -707,7 +707,7 @@ function abrirSelector(pi){
   S._pcol = S._pcol && S._pcol!=="cantos" ? S._pcol : "sug";
   hoja(`Elegir canto · ${PARTE[S.rep.p[pi].k]?.n}`,`
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input class="field" type="search" id="pq" placeholder="${S.rep.p[pi].k==="aclamacion"?"Buscar Alleluia, Tracto, Misa o santo":"Buscar en todo el cantoral"}" aria-label="Buscar"></div>
+    <input class="field" type="search" id="pq" placeholder="${S.rep.p[pi].k==="aclamacion"?"Buscar Alleluia, Tracto, Misa o santo":S.rep.p[pi].k==="credo"?"Buscar Credo":"Buscar en todo el cantoral"}" aria-label="Buscar"></div>
     <div id="picklist"></div>`);
   $layer.querySelector(".sheet").classList.add("ancha");
   pintarSelector();
@@ -718,6 +718,8 @@ function pintarSelector(){
   const q=S._pq, ya=new Set(parte.s);
   const fila=c=>filaCanto(c,"agregar").replace("<li>",`<li class="${ya.has(c.id)?"in":""}">`);
   if(parte.k==="aclamacion"){ pintarSelectorAlleluia(q,fila); return; }
+  if(parte.k==="credo"){ const cr=gregLista("credo").filter(c=>busca(c,q));
+    document.getElementById("picklist").innerHTML = cr.length? `<div class="grp">Kyriale · Credo</div><ul class="lista pick">${cr.map(fila).join("")}</ul>` : `<p class="empty">Ningún Credo coincide con la búsqueda.</p>`; return; }
   const lista=(titulo,arr,nota="")=>arr.length?`<div class="grp">${titulo}${nota?` <small>${nota}</small>`:""}</div><ul class="lista pick">${arr.map(fila).join("")}</ul>`:"";
   // Cantos de la carpeta
   const all=cantos().filter(c=>!c.greg&&busca(c,q));
