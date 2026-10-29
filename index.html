@@ -451,6 +451,17 @@ ul.lista .n{align-self:start;padding-top:.3em}
 .col .chev{color:var(--muted)}
 .col:focus-visible{outline:2px solid var(--rubric);outline-offset:2px}
 .vacio .lam.arco{width:64px;height:78px;flex:none}
+/* Las ilustraciones nunca se cortan: el arco tiene proporción fija y el dibujo entra entero (contain) */
+.lam.arco{aspect-ratio:5/6;height:auto!important;min-height:0!important;padding:14% 10% 8%;box-sizing:border-box;align-self:center}
+.lam.arco .ilu{-webkit-mask-size:contain!important;mask-size:contain!important;-webkit-mask-position:center bottom!important;mask-position:center bottom!important}
+.tile-rep{grid-template-columns:1fr minmax(112px,min(40%,200px))}
+.tile-rep .lam.arco{width:100%;align-self:start}
+.col{grid-template-columns:76px 1fr 24px}
+.col .lam.arco{width:76px}
+.lam.arco .ilu{flex:1 1 auto;align-self:stretch;width:auto;height:auto;min-width:0}
+.vacio .lam.arco{width:64px!important;flex:none}
+.lam.arco{position:relative;padding:0!important}
+.lam.arco .ilu{position:absolute;inset:16% 9% 7%;width:auto;height:auto}
 </style>
 </head>
 <body>
