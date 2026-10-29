@@ -425,6 +425,32 @@ ul.lista .n{align-self:start;padding-top:.3em}
 .tile-rep .lam{grid-area:img}
 .tile-rep .acc{grid-area:acc;padding:0 0 4px 10px;margin-top:0}
 .portada{gap:20px}
+
+/* ===== Versión pergamino: un solo tono para las tarjetas, ilustraciones en arco ===== */
+:root{--perg:#f4eee4;--perg-arco:#e7ddcc;--tinta-ilus:#2a201a}
+:root[data-theme="dark"]{--perg:#15130f;--perg-arco:#e7ddcc}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--perg:#15130f;--perg-arco:#e7ddcc}}
+.top-in.nueva .brand.seccion{font-size:var(--f-item);font-weight:600}
+:root:not([data-vista="inicio"]) .pag-t{display:none}
+.pag-sub{margin-top:16px}
+.lam.arco{background:var(--perg-arco);border-radius:999px 999px var(--r-1) var(--r-1);display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.ilu{display:block;width:100%;height:100%;background:var(--tinta-ilus);-webkit-mask:var(--ilu) center 70%/78% auto no-repeat;mask:var(--ilu) center 70%/78% auto no-repeat}
+.tile-rep{background:var(--perg);color:var(--ink);grid-template-columns:1fr 38%}
+.tile-rep .ts{color:var(--ink2)}
+.tile-rep .hoyl{font-size:var(--f-dato);color:var(--muted)}
+.tile-rep .tt{color:var(--ink)}
+.tile-rep .lam.arco{padding:0;min-height:170px}
+.tile-rep .lam.arco .ilu{-webkit-mask-size:84% auto;mask-size:84% auto;-webkit-mask-position:center 80%;mask-position:center 80%}
+.tile-rep .acc .btn:not(.primary){border-color:var(--line2);color:var(--ink)}
+.cols{display:flex;flex-direction:column;gap:10px}
+.col{display:grid;grid-template-columns:84px 1fr 24px;align-items:center;gap:14px;width:100%;padding:10px 12px 10px 10px;border:0;border-radius:var(--r-2);background:var(--perg);color:var(--ink);text-align:left;cursor:pointer}
+.col .lam.arco{height:100px}
+.col-t{display:flex;flex-direction:column;gap:2px}
+.col-t .tt{font-family:var(--titulo);font-size:var(--f-item);font-weight:600}
+.col-t .ts{font-size:var(--f-dato);color:var(--muted)}
+.col .chev{color:var(--muted)}
+.col:focus-visible{outline:2px solid var(--rubric);outline-offset:2px}
+.vacio .lam.arco{width:64px;height:78px;flex:none}
 </style>
 </head>
 <body>
@@ -667,8 +693,20 @@ function repActual(){
   if(S.mode==="edit") return S.rep;
   return S.shared || vigente || null;
 }
+function tituloVista(){
+  if(S.view==="inicio") return "";
+  if(S.view==="rep") return "Repertorio";
+  if(S.view==="marcados") return "Marcados";
+  if(S.view==="repertorios") return "Repertorios";
+  const s=S.sec||"";
+  if(s==="gre") return "Gregoriano"; if(s==="him") return "Himnos"; if(s==="pol") return "Polifonías";
+  if(s.startsWith("gre-")) return (SECC_GRE.find(x=>x[0]===s.slice(4))||[0,"Gregoriano"])[1];
+  return "";
+}
 function render(){
   const at=document.getElementById("atras"); if(at) at.hidden = S.view==="inicio";
+  const br=document.querySelector(".top-in.nueva .brand"); if(br){ const t=tituloVista(); br.innerHTML= t? esc(t) : 'Cantoral <b>Laudibus</b>'; br.classList.toggle("seccion",!!t); }
+  document.documentElement.dataset.vista=S.view;
   if(S.view==="inicio"){renderInicio();return}
   if(S.view==="sec"){renderSeccion();return}
   if(S.view==="marcados"){renderMarcados();return}
@@ -773,21 +811,22 @@ function renderInicio(){
   const r=S.rep, n=piezasRep(r);
   const q=S.qh.trim();
   const res=q? todasLasPiezas().filter(c=>busca(c,q)).slice(0,80) : [];
-  const tile=(cls,v,img,tt)=>`<button class="tile ${cls}" data-act="ir" data-v="${v}"><span class="lam"><img src="ilus/${img}.png" alt="" aria-hidden="true"></span><span class="tt">${tt}</span></button>`;
+  const tile=(cls,v,img,tt,sub)=>`<button class="col ${cls}" data-act="ir" data-v="${v}"><span class="lam arco"><span class="ilu" style="--ilu:url(ilus/${img}.png)"></span></span><span class="col-t"><span class="tt">${tt}</span><span class="ts">${sub}</span></span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>`;
   const hoy=hoyISO(), tk=tiempoDeFecha(hoy)||"", dom=proximoDomingo(), propDom=propiosDelDia(dom)[0];
   const otros=repertorios().filter(x=>x.id!==r.id);
   const marc=MARC().map(id=>canto(id)).filter(Boolean);
   const tarjeta = n ? `
       <div class="tile tile-rep"><span class="txt">
-        <span class="rot">Repertorio en curso</span>
+        <span class="ts hoyl">Hoy, ${esc(fechaLarga(hoy).replace(/ de \d{4}$/,""))}</span>
         <span class="tt">${esc(r.t||"Sin nombre")}</span>
         <span class="ts">${n} ${n===1?"pieza":"piezas"}</span>
-      </span><span class="lam"><img src="ilus/templo.png" alt="" aria-hidden="true"></span><span class="acc"><button class="btn primary" data-act="cantar" data-i="0">Cantar</button><button class="btn" data-act="ir" data-v="rep">Editar</button></span></div>`
+      </span><span class="lam arco"><span class="ilu" style="--ilu:url(ilus/templo.png)"></span></span><span class="acc"><button class="btn primary" data-act="cantar" data-i="0">Cantar</button><button class="btn" data-act="ir" data-v="rep">Editar</button></span></div>`
     : `
       <div class="tile tile-rep"><span class="txt">
+        <span class="ts hoyl">Hoy, ${esc(fechaLarga(hoy).replace(/ de \d{4}$/,""))}</span>
         <span class="tt">Armar un repertorio</span>
         ${propDom?`<span class="ts">Próximo domingo: ${esc(propDom.t)}</span>`:""}
-      </span><span class="lam"><img src="ilus/templo.png" alt="" aria-hidden="true"></span><span class="acc"><button class="btn primary" data-act="ir" data-v="rep">Empezar</button>${propDom?`<button class="btn" data-act="propioDomingo" data-k="${esc(propDom.k)}">Con su Propio</button>`:""}</span></div>`;
+      </span><span class="lam arco"><span class="ilu" style="--ilu:url(ilus/templo.png)"></span></span><span class="acc"><button class="btn primary" data-act="ir" data-v="rep">Empezar</button>${propDom?`<button class="btn" data-act="propioDomingo" data-k="${esc(propDom.k)}">Con su Propio</button>`:""}</span></div>`;
   $main.innerHTML=`<div class="portada">
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -795,22 +834,21 @@ function renderInicio(){
     </div>
     ${q?(res.length?`<ul class="lista">${res.map(c=>filaCanto(c,"leer")).join("")}</ul>`:`<p class="empty">Nada coincide con «${esc(q)}».</p>`):`
     <section class="bloque">
-      <div class="rot hoy"><span class="punto" style="background:${COLOR_TIEMPO[tk]||"#3f6b3a"}" aria-hidden="true"></span>Hoy · ${esc(fechaLarga(hoy).replace(/ de \d{4}$/,""))}${tk&&TIEMPO[tk]?` · ${esc(TIEMPO[tk])}`:""}</div>
       ${tarjeta}
       ${n?`<button class="btn ghost enlace" data-act="nuevoRepertorio">+ Armar otro repertorio</button>`:""}
     </section>
     <section class="bloque">
       <div class="rot">Cantoral</div>
-      <div class="tiles">
-        ${tile("gre","sec:gre","gloria","Gregoriano")}
-        ${tile("him","sec:him","coro","Himnos")}
-        ${tile("pol","sec:pol","aleluya","Polifonías")}
+      <div class="cols">
+        ${tile("gre","sec:gre","gloria","Gregoriano","Ordinarios, propios y cantos varios")}
+        ${tile("him","sec:him","coro","Himnos","Populares y versiones ADF")}
+        ${tile("pol","sec:pol","aleluya","Polifonías","Textos para seguir al coro")}
       </div>
     </section>
     <section class="bloque">
       <div class="rot-fila"><span class="rot">Marcados</span>${marc.length?`<button class="btn ghost" data-act="ir" data-v="marcados">Ver todos</button>`:""}</div>
       ${marc.length?`<ul class="lista">${marc.slice(0,3).map(c=>filaCanto(c,"leer")).join("")}</ul>`
-        :`<div class="vacio"><img src="ilus/ave.png" alt="" aria-hidden="true"><span>Lo que marques al abrir un canto aparecerá aquí, para tenerlo a mano.</span></div>`}
+        :`<div class="vacio"><span class="lam arco"><span class="ilu" style="--ilu:url(ilus/ave.png)"></span></span><span>Lo que marques al abrir un canto aparecerá aquí, para tenerlo a mano.</span></div>`}
     </section>
     ${otros.length?`<section class="bloque">
       <div class="rot-fila"><span class="rot">Repertorios guardados</span>${otros.length>3?`<button class="btn ghost" data-act="ir" data-v="repertorios">Ver todos</button>`:""}</div>
