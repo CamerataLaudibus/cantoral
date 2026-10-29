@@ -389,6 +389,42 @@ ul.lista .n{font-size:var(--f-ui)}
 ul.lista .f{font-style:normal}
 .canto{font-size:calc(var(--lec) * .93)}
 ul.lista .n{align-self:start;padding-top:.3em}
+
+/* Portada: orden por uso */
+.portada{gap:24px;padding-top:12px;max-width:640px;margin:0 auto}
+.portada .search{margin:0}
+.portada .search input{min-height:48px}
+.bloque{display:flex;flex-direction:column;gap:10px}
+.rot{font-size:var(--f-dato);font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.rot .punto{width:10px;height:10px;border-radius:50%;display:inline-block}
+.rot-fila{display:flex;align-items:center;justify-content:space-between;min-height:40px}
+.tile-rep{min-height:196px;grid-template-columns:1fr 34%;cursor:default;padding:10px 10px 10px 8px}
+.tile-rep .txt{justify-content:space-between;padding:8px 0 6px 10px;gap:6px}
+.tile-rep .rot{color:var(--t-muted)}
+.tile-rep .tt{font-size:var(--f-titulo);font-weight:600}
+.tile-rep .ts{font-size:var(--f-ui)}
+.tile-rep .acc{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.tile-rep .acc .btn{min-height:44px}
+.tile-rep .acc .btn:not(.primary){border-color:rgba(0,0,0,.28);color:var(--t-ink)}
+:root[data-theme="dark"] .tile-rep .acc .btn:not(.primary){border-color:var(--line2)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tile-rep .acc .btn:not(.primary){border-color:var(--line2)}}
+.tile-rep .lam img{max-height:150px}
+.enlace{align-self:flex-start;padding:0 2px}
+.tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tiles .tile{aspect-ratio:auto;padding:8px 8px 12px}
+.tiles .tile .lam{height:86px;flex:none}
+.tiles .tile .lam img{max-height:76px}
+.tiles .tile.gre .lam img{max-height:82px}
+.tiles .tile .tt{font-size:var(--f-ui);font-weight:600;font-size:1.125rem}
+.vacio{display:flex;gap:14px;align-items:center;padding:14px;border:1px dashed var(--line2);border-radius:var(--r-2);color:var(--ink2)}
+.vacio img{width:60px;height:auto;opacity:.85}
+:root[data-theme="dark"] .vacio img{filter:invert(1);opacity:.7}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .vacio img{filter:invert(1);opacity:.7}}
+.tile-rep{grid-template-areas:"txt img" "acc acc";row-gap:4px}
+.tile-rep .txt{grid-area:txt;justify-content:flex-start;padding-top:10px}
+.tile-rep .lam{grid-area:img}
+.tile-rep .acc{grid-area:acc;padding:0 0 4px 10px;margin-top:0}
+.portada{gap:20px}
 </style>
 </head>
 <body>
@@ -521,9 +557,17 @@ function completarPartes(r){
   r.p.sort((a,b)=>(PARTE[a.k]?.i??99)-(PARTE[b.k]?.i??99));
   return r;
 }
-function nuevoRep(){return {t:"",d:hoyISO(),p:DEFAULT_PARTS.map(k=>({k,s:[],nota:""}))}}
+function nuevoRep(){return {id:"r"+Date.now().toString(36),t:"",d:hoyISO(),p:DEFAULT_PARTS.map(k=>({k,s:[],nota:""}))}}
+// Repertorios guardados en este dispositivo (el del director): se guardan solos mientras se arman
+function repertorios(){ return LS.get("repertorios",[]).sort((a,b)=>(b.mod||0)-(a.mod||0)); }
+function guardarEnLista(r){
+  if(!r) return; if(!r.id) r.id="r"+Date.now().toString(36);
+  const tiene=(r.p||[]).some(p=>p.s.length)||r.t; let L=LS.get("repertorios",[]);
+  L=L.filter(x=>x.id!==r.id); if(tiene) L.push({...JSON.parse(JSON.stringify(r)),mod:Date.now()});
+  LS.set("repertorios",L);
+}
 function hoyISO(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)}
-function guardarBorrador(){LS.set("borrador",S.rep)}
+function guardarBorrador(){ if(!S.rep.id) S.rep.id="r"+Date.now().toString(36); LS.set("borrador",S.rep); guardarEnLista(S.rep); }
 
 /* ===================== Utilidades ===================== */
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -628,6 +672,7 @@ function render(){
   if(S.view==="inicio"){renderInicio();return}
   if(S.view==="sec"){renderSeccion();return}
   if(S.view==="marcados"){renderMarcados();return}
+  if(S.view==="repertorios"){renderRepertorios();return}
   if(S.view==="lib"){renderLib();return}
   const lectura = S.mode!=="edit" && (S.shared || vigente);
   if(lectura) renderLectura(S.shared||vigente, !!S.shared);
@@ -721,33 +766,66 @@ function todasLasPiezas(){
   [].concat(cantos(),gregLista(),propios,alleluias.map(a=>a.c)).forEach(c=>{ if(c&&!vistos.has(c.id)&&!c.oculto){ vistos.add(c.id); out.push(c); } });
   return out;
 }
+function proximoDomingo(){ const d=new Date(); d.setHours(12); d.setDate(d.getDate()+((7-d.getDay())%7)); return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); }
+const COLOR_TIEMPO={adviento:"#6b4a8a",cuaresma:"#6b4a8a",navidad:"#b8962e",pascua:"#b8962e","semana-santa":"#981914",pentecostes:"#981914"};
+function filaRep(r){ const n=piezasRep(r); return `<li><button data-act="abrirRep" data-id="${esc(r.id)}"><span class="n"></span><span class="tt-wrap"><span class="t">${esc(r.t||"Sin nombre")}</span><span class="f">${n} ${n===1?"pieza":"piezas"} · ${esc(fechaLarga(new Date(r.mod||Date.now()).toISOString().slice(0,10)))}</span></span><span class="tag"></span></button></li>`; }
 function renderInicio(){
   const r=S.rep, n=piezasRep(r);
-  const tile=(cls,act,v,img,tt)=>`<button class="tile ${cls}" data-act="${act}" data-v="${v}"><span class="lam"><img src="ilus/${img}.png" alt="" aria-hidden="true"></span><span class="tt">${tt}</span></button>`;
   const q=S.qh.trim();
   const res=q? todasLasPiezas().filter(c=>busca(c,q)).slice(0,80) : [];
+  const tile=(cls,v,img,tt)=>`<button class="tile ${cls}" data-act="ir" data-v="${v}"><span class="lam"><img src="ilus/${img}.png" alt="" aria-hidden="true"></span><span class="tt">${tt}</span></button>`;
+  const hoy=hoyISO(), tk=tiempoDeFecha(hoy)||"", dom=proximoDomingo(), propDom=propiosDelDia(dom)[0];
+  const otros=repertorios().filter(x=>x.id!==r.id);
+  const marc=MARC().map(id=>canto(id)).filter(Boolean);
+  const tarjeta = n ? `
+      <div class="tile tile-rep"><span class="txt">
+        <span class="rot">Repertorio en curso</span>
+        <span class="tt">${esc(r.t||"Sin nombre")}</span>
+        <span class="ts">${n} ${n===1?"pieza":"piezas"}</span>
+      </span><span class="lam"><img src="ilus/templo.png" alt="" aria-hidden="true"></span><span class="acc"><button class="btn primary" data-act="cantar" data-i="0">Cantar</button><button class="btn" data-act="ir" data-v="rep">Editar</button></span></div>`
+    : `
+      <div class="tile tile-rep"><span class="txt">
+        <span class="tt">Armar un repertorio</span>
+        ${propDom?`<span class="ts">Próximo domingo: ${esc(propDom.t)}</span>`:""}
+      </span><span class="lam"><img src="ilus/templo.png" alt="" aria-hidden="true"></span><span class="acc"><button class="btn primary" data-act="ir" data-v="rep">Empezar</button>${propDom?`<button class="btn" data-act="propioDomingo" data-k="${esc(propDom.k)}">Con su Propio</button>`:""}</span></div>`;
   $main.innerHTML=`<div class="portada">
-    <button class="tile tile-rep" data-act="ir" data-v="rep">
-      <span class="txt"><span class="tt">Armar un repertorio</span>
-        ${n?`<span class="ts">En curso: <i>${esc(r.t||"sin nombre")}</i> · ${n} ${n===1?"pieza":"piezas"}</span><span class="tl">Seguir</span>`
-           :`<span class="ts">Elige los cantos de cada parte de la Misa y compártelos con el coro.</span>`}</span>
-      <span class="lam"><img src="ilus/templo.png" alt="" aria-hidden="true"></span>
-    </button>
-    <div class="tiles">
-      ${tile("gre","ir","sec:gre","gloria","Gregoriano")}
-      ${tile("him","ir","sec:him","coro","Himnos")}
-      ${tile("pol","ir","sec:pol","aleluya","Polifonías")}
-      ${tile("mar","ir","marcados","ave","Marcados")}
-    </div>
     <div class="search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input class="field" type="search" data-in="qh" placeholder="Buscar en todo el cantoral" value="${esc(S.qh)}" aria-label="Buscar en todo el cantoral">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input class="field" type="search" data-in="qh" placeholder="Buscar canto, gregoriano o texto" value="${esc(S.qh)}" aria-label="Buscar en todo el cantoral">
     </div>
-    ${q?(res.length?`<ul class="lista">${res.map(c=>filaCanto(c,"leer")).join("")}</ul>`:`<p class="empty">Nada coincide con «${esc(q)}».</p>`):""}
-    <p class="pie-portada">Camerata Laudibus · <button data-act="acerca">Acerca del Cantoral</button></p>
+    ${q?(res.length?`<ul class="lista">${res.map(c=>filaCanto(c,"leer")).join("")}</ul>`:`<p class="empty">Nada coincide con «${esc(q)}».</p>`):`
+    <section class="bloque">
+      <div class="rot hoy"><span class="punto" style="background:${COLOR_TIEMPO[tk]||"#3f6b3a"}" aria-hidden="true"></span>Hoy · ${esc(fechaLarga(hoy).replace(/ de \d{4}$/,""))}${tk&&TIEMPO[tk]?` · ${esc(TIEMPO[tk])}`:""}</div>
+      ${tarjeta}
+      ${n?`<button class="btn ghost enlace" data-act="nuevoRepertorio">+ Armar otro repertorio</button>`:""}
+    </section>
+    <section class="bloque">
+      <div class="rot">Cantoral</div>
+      <div class="tiles">
+        ${tile("gre","sec:gre","gloria","Gregoriano")}
+        ${tile("him","sec:him","coro","Himnos")}
+        ${tile("pol","sec:pol","aleluya","Polifonías")}
+      </div>
+    </section>
+    <section class="bloque">
+      <div class="rot-fila"><span class="rot">Marcados</span>${marc.length?`<button class="btn ghost" data-act="ir" data-v="marcados">Ver todos</button>`:""}</div>
+      ${marc.length?`<ul class="lista">${marc.slice(0,3).map(c=>filaCanto(c,"leer")).join("")}</ul>`
+        :`<div class="vacio"><img src="ilus/ave.png" alt="" aria-hidden="true"><span>Lo que marques al abrir un canto aparecerá aquí, para tenerlo a mano.</span></div>`}
+    </section>
+    ${otros.length?`<section class="bloque">
+      <div class="rot-fila"><span class="rot">Repertorios guardados</span>${otros.length>3?`<button class="btn ghost" data-act="ir" data-v="repertorios">Ver todos</button>`:""}</div>
+      <ul class="lista">${otros.slice(0,3).map(filaRep).join("")}</ul>
+    </section>`:""}`}
   </div>`;
   $bar.innerHTML="";
   if(S._focusQh){ const i=$main.querySelector('[data-in="qh"]'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } S._focusQh=false; }
+}
+function renderRepertorios(){
+  const L=repertorios();
+  $main.innerHTML=`<h2 class="pag-t">Repertorios guardados</h2><p class="pag-sub">Se guardan solos en este dispositivo mientras los armas.</p>`+
+    (L.length?`<ul class="lista">${L.map(filaRep).join("")}</ul>`:`<p class="empty">Todavía no hay repertorios guardados.</p>`)+
+    `<p style="margin-top:16px"><button class="btn primary" data-act="nuevoRepertorio">Nuevo repertorio</button></p>`;
+  $bar.innerHTML="";
 }
 const SECC_GRE=[["ord","Ordinarios","Kyriale y Credos"],["tie","Propios del Tiempo",""],["san","Propios de los Santos",""],["com","Comunes","Alleluias y Tractos del Común"],["vot","Votivas",""],["var","Cantos varios","Himnos, antífonas y propios de la schola"]];
 function lista(arr){ return arr.length?`<ul class="lista">${arr.map(c=>filaCanto(c,"leer")).join("")}</ul>`:`<p class="empty">Todavía no hay piezas aquí.</p>`; }
@@ -1146,7 +1224,16 @@ document.addEventListener("click",async e=>{
     case "atras": volver(); break;
     case "menu": abrirMenu(); break;
     case "nota": S._notaPi=+d.pi; render(); setTimeout(()=>document.querySelector(`.nota[data-pi="${d.pi}"]`)?.focus(),0); break;
-    case "masRep": hoja("Repertorio",`<ul class="secciones">${(S.shared||vigente)?`<li><button data-act="salirEdicion"><span>Volver al repertorio recibido</span><span class="chev">›</span></button></li>`:""}<li><button data-act="vaciar"><span>Empezar de nuevo</span><span class="chev">›</span></button></li></ul>`); break;
+    case "masRep": hoja("Repertorio",`<ul class="secciones">${(S.shared||vigente)?`<li><button data-act="salirEdicion"><span>Volver al repertorio recibido</span><span class="chev">›</span></button></li>`:""}
+      <li><button data-act="nuevoRepertorio"><span>Nuevo repertorio</span><span class="chev">›</span></button></li>
+      <li><button data-act="duplicarRep"><span>Duplicar este repertorio</span><span class="chev">›</span></button></li>
+      ${repertorios().length?`<li><button data-act="ir" data-v="repertorios"><span>Repertorios guardados</span><small>${repertorios().length}</small></button></li>`:""}
+      <li><button data-act="eliminarRep"><span style="color:var(--rubric)">Eliminar este repertorio</span></button></li></ul>`); break;
+    case "nuevoRepertorio": cerrarCapa(); guardarEnLista(S.rep); S.rep=nuevoRep(); S._nombre=false; S.mode="edit"; LS.set("borrador",S.rep); if(S.view==="rep") render(); else navegar("rep"); break;
+    case "duplicarRep": { cerrarCapa(); const c=JSON.parse(JSON.stringify(S.rep)); c.id="r"+Date.now().toString(36); c.t=(S.rep.t||"Sin nombre")+" (copia)"; S.rep=c; guardarBorrador(); render(); toast("Repertorio duplicado."); break; }
+    case "eliminarRep": if(confirm("¿Eliminar este repertorio? No se puede deshacer.")){ cerrarCapa(); LS.set("repertorios",LS.get("repertorios",[]).filter(x=>x.id!==S.rep.id)); const L=repertorios(); S.rep=L[0]?completarPartes(JSON.parse(JSON.stringify(L[0]))):nuevoRep(); LS.set("borrador",S.rep); render(); toast("Repertorio eliminado."); } break;
+    case "abrirRep": { const x=repertorios().find(y=>y.id===d.id); if(x){ guardarEnLista(S.rep); S.rep=completarPartes(JSON.parse(JSON.stringify(x))); delete S.rep.mod; S.mode="edit"; LS.set("borrador",S.rep); navegar("rep"); } break; }
+    case "propioDomingo": { S.rep=nuevoRep(); LS.set("borrador",S.rep); aplicarPropio(d.k); navegar("rep"); break; }
     case "hcol": S.hADF=d.v==="1"; render(); break;
     case "carpeta": window.open(CARPETA_URL,"_blank","noopener"); break;
     case "avisos": hoja("Avisos de la carpeta",`<ul style="margin:8px 0 0;padding-left:20px">${AVISOS.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`); break;
@@ -1174,7 +1261,7 @@ document.addEventListener("click",async e=>{
     case "pcol": S._pcol=d.v; pintarSelector(); break;
     case "pal": S._pal=d.v; pintarSelector(); break;
     case "misa": aplicarMisa(+d.i); break;
-    case "vaciar": if(confirm("¿Borrar este repertorio y empezar uno nuevo?")){cerrarCapa();S.rep=nuevoRep();S._nombre=false;guardarBorrador();render()} break;
+    case "vaciar": if(confirm("¿Empezar un repertorio nuevo? El actual queda guardado.")){cerrarCapa();guardarEnLista(S.rep);S.rep=nuevoRep();S._nombre=false;LS.set("borrador",S.rep);render()} break;
     case "cantar": { const rep = S.mode==="edit" || !S.shared ? S.rep : S.shared; abrirCoro(rep,+d.i||0); break; }
     case "mover": moverCoro(+d.d); break;
     case "ir": S._coro.i=+d.i; S._coro.idx=false; pintarCoro(true); break;
