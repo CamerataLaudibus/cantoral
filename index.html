@@ -493,6 +493,16 @@ ul.lista .n{align-self:start;padding-top:.3em}
 /* La cabecera no crece sin límite: con letra grande se prioriza el contenido */
 :root[data-grande] .top-in.nueva .brand{font-size:min(var(--f-titulo),30px)}
 :root[data-grande] .top-in.nueva .brand.seccion{font-size:min(var(--f-item),24px)}
+
+/* ===== Polifonías ===== */
+.canto.poli .b.p{margin:0 0 1.1em}
+.canto.poli .b.p .ln{display:block}
+.canto.poli .b.l{color:var(--rubric)}
+.canto .ctit .comp{font-family:var(--sans);font-size:var(--f-dato);color:var(--muted);margin-top:.15em}
+ul.lista li button.sin-n{grid-template-columns:1fr auto;padding-left:8px}
+.pcols-tabs{overflow-x:auto;scrollbar-width:none}.pcols-tabs::-webkit-scrollbar{display:none}
+.pcols-tabs button{flex:1 0 auto}
+ul.lista .sin-n .f{font-family:var(--sans);font-style:normal}
 </style>
 </head>
 <body>
@@ -596,6 +606,7 @@ const LS = {
 };
 let extra = {};                      // (sin uso: los cantos se editan en la planilla)
 let AVISOS = [];
+let POLI = [];                       // polifonías de la planilla «Polifonías» (id p1, p2…)
 let OCULTOS = new Set();             // gregorianos marcados «Visible: No» en la planilla «Gregorianos visibles»                     // filas de la planilla para revisar
 
 /* ===== Carpeta de Google Drive =====
@@ -665,11 +676,11 @@ function todos(){
   return [...m.values()].filter(c=>!c.oculto).sort((a,b)=>(a.n||999)-(b.n||999) || a.t.localeCompare(b.t));
 }
 let _cache=null; function cantos(){return _cache||(_cache=todos())}
-function canto(id){id=String(id);if(id[0]==="g")return cantoGreg(id);return cantos().find(c=>c.id===id) || (extra[id]&&{...extra[id],id}) || BASE.find(c=>String(c.id)===id)}
+function canto(id){id=String(id);if(id[0]==="g")return cantoGreg(id);if(/^p\d+$/.test(id))return POLI.find(c=>c.id===id)||null;return cantos().find(c=>c.id===id) || (extra[id]&&{...extra[id],id}) || BASE.find(c=>String(c.id)===id)}
 function sugeridas(c){ if(c.p&&c.p.length) return c.p; if(c.temas) return []; return (CATS[c.c]?.p)||[]; }
 function catNombre(k){return CATS[k]?.n || k || "Sin categoría"}
-function rotulo(c){return c.greg? c.t+(c.sub?" · "+c.sub:"") : c.n+". "+c.t}
-function primerVerso(c){if(c.greg&&c.propio)return "Gregoriano propio";if(c.greg)return [c.sub,c.f].filter(Boolean).join(" · ");const e=(c.e||[]).find(x=>x[0]!=="l");return e?e[2].split("\n")[0].replace(/^\s*~\s*/,""):""}
+function rotulo(c){return c.pol? c.t : c.greg? c.t+(c.sub?" · "+c.sub:"") : c.n+". "+c.t}
+function primerVerso(c){if(c.pol)return c.comp||"Polifonía";if(c.greg&&c.propio)return "Gregoriano propio";if(c.greg)return [c.sub,c.f].filter(Boolean).join(" · ");const e=(c.e||[]).find(x=>x[0]!=="l");return e?e[2].split("\n")[0].replace(/^\s*~\s*/,""):""}
 function busca(c,q){if(!q) return true;const h=norm(c.t+" "+c.n+" "+(c.sub||"")+" "+(c.f||"")+" "+(c.e||[]).map(e=>e[2]).join(" "));return norm(q).split(/\s+/).every(w=>h.includes(w))}
 
 /* Texto pegado → estrofas (misma regla que la importación de los Word) */
@@ -855,7 +866,7 @@ function alternarMarca(id){ const m=MARC(); const i=m.indexOf(id); if(i>=0) m.sp
 function piezasRep(r){ return (r&&r.p||[]).reduce((s,p)=>s+p.s.length,0); }
 function todasLasPiezas(){
   const {propios,alleluias}=gregIndice(), vistos=new Set(), out=[];
-  [].concat(cantos(),gregLista(),propios,alleluias.map(a=>a.c)).forEach(c=>{ if(c&&!vistos.has(c.id)&&!c.oculto){ vistos.add(c.id); out.push(c); } });
+  [].concat(cantos(),gregLista(),propios,alleluias.map(a=>a.c),POLI).forEach(c=>{ if(c&&!vistos.has(c.id)&&!c.oculto){ vistos.add(c.id); out.push(c); } });
   return out;
 }
 function proximoDomingo(){ const d=new Date(); d.setHours(12); d.setDate(d.getDate()+((7-d.getDay())%7)); return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); }
@@ -951,7 +962,17 @@ function renderSeccion(){
     else if(k==="var"){ html+=`<h3 class="cat">Himnos y antífonas</h3>`+lista(gregLista("libres")); const pr=gregPropios(); if(pr.length) html+=`<h3 class="cat">Propios de la schola</h3>`+lista(pr); }
   } else if(s==="him"){ renderHimnos(); return; }
   else if(s==="pol"){
-    html=`<h2 class="pag-t">Polifonías</h2><p class="empty">Todavía no hay textos de polifonías. Se cargarán desde su planilla en la carpeta.</p>`;
+    const xs=POLI.filter(c=>!c.oculto), base=xs.filter(c=>busca(c,S.q)).sort((a,b)=>a.t.localeCompare(b.t,"es"));
+    if(!xs.length){ html=`<h2 class="pag-t">Polifonías</h2><p class="empty">Todavía no hay textos de polifonías. Se cargan desde la planilla «Polifonías» en la carpeta de cantos.</p>`; }
+    else{
+      html=`<h2 class="pag-t">Polifonías</h2>
+      <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="field" type="search" data-in="q" placeholder="Buscar por título, compositor o texto" value="${esc(S.q)}" aria-label="Buscar"></div>
+      ${base.length? `<ul class="lista poli">${base.map(c=>filaCanto(c,"leer")).join("")}</ul>` : `<p class="empty">Ninguna polifonía coincide con «${esc(S.q)}».</p>`}`;
+      $main.innerHTML=html; $bar.innerHTML="";
+      const inp=$main.querySelector('[data-in="q"]'); if(inp && S._focusQ){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);S._focusQ=false}
+      return;
+    }
   }
   $main.innerHTML=html; $bar.innerHTML="";
 }
@@ -1042,8 +1063,8 @@ function renderLib(){
   const inp=$main.querySelector('[data-in="q"]'); if(inp && document.activeElement?.dataset?.in!=="q" && S._focusQ){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);S._focusQ=false}
 }
 function filaCanto(c,act,extraAttr=""){
-  return `<li><button data-act="${act}" data-id="${esc(c.id)}" ${extraAttr}>
-    <span class="n">${esc(c.n)}</span>
+  return `<li><button data-act="${act}" data-id="${esc(c.id)}" ${extraAttr}${c.pol?' class="sin-n"':""}>
+    ${c.pol?"":`<span class="n">${esc(c.n)}</span>`}
     <span class="tt-wrap"><span class="t">${esc(c.t)}</span><span class="f">${esc(primerVerso(c))}</span></span>
     <span class="tag">${act==="agregar"?'<span class="add" aria-hidden="true">+</span>':""}</span>
   </button></li>`;
@@ -1067,6 +1088,12 @@ function htmlCanto(c,nota,parte){
     ${(c.segs||[["g",c.gid]]).map(([t,v])=> t==="g"
         ? `<div class="partitura" data-g="${esc(v)}"><p class="cargando">Preparando la partitura…</p></div>`
         : `<div class="letania">${v}</div>`).join("")}
+  </article>`;
+  if(c.pol) return `<article class="canto poli">
+    ${parte!=null?`<div class="ctit"><div class="cparte">${esc(parte)}</div><h1>${esc(c.t)}</h1>${c.comp?`<div class="comp">${esc(c.comp)}</div>`:""}</div>`
+      :`<div class="gtit"><h1>${esc(c.t)}</h1><div class="cat">${esc(c.comp||"Polifonía")}</div>${tieneGlosa(c)?`<button class="trad-btn" data-act="trad" aria-pressed="${!!S.trad}">Traducción</button>`:""}</div>`}
+    ${nota?`<p class="obs">${esc(nota)}</p>`:""}
+    ${(c.e||[]).map(x=> x[0]==="l" ? `<p class="b l">${esc(x[2])}</p>` : `<p class="b p">${txtGlosa(x[2])}</p>`).join("")}
   </article>`;
   let e=c.e||[];
   if(S.coroR && S._enCoro){
@@ -1154,13 +1181,17 @@ function pintarSelector(){
     + lista(kyr.length?"Himnos y antífonas":`Sugeridos para ${esc(PARTE[parte.k].n)}`,lsug)
     + lista(lsug.length||kyr.length?"Otros himnos y antífonas":"Himnos y antífonas",lresto,lsug.length?"también se pueden usar":"")
     || `<p class="empty">Ningún gregoriano coincide con la búsqueda.</p>`;
+  const pols=POLI.filter(c=>!c.oculto&&busca(c,q)).sort((a,b)=>a.t.localeCompare(b.t,"es"));
+  const polS=pols.filter(c=>c.p.includes(parte.k)), polR=pols.filter(c=>!c.p.includes(parte.k));
+  const colPol = lista(`Sugeridas para ${esc(PARTE[parte.k].n)}`,polS) + lista(polS.length?"Otras polifonías":"Polifonías",polR,polS.length?"también se pueden usar":"")
+    || `<p class="empty">${POLI.length?"Ninguna polifonía coincide con la búsqueda.":"Todavía no hay textos de polifonías."}</p>`;
   const nC=sug.length, nG=prop.length+pm.length+kyr.length+lib.length;
-  if(!["sug","greg","tiempo","tema"].includes(S._pcol)) S._pcol="sug";
+  if(!["sug","greg","pol","tiempo","tema"].includes(S._pcol)) S._pcol="sug";
   const tab=(v,t,n)=>`<button role="tab" data-act="pcol" data-v="${v}" aria-selected="${S._pcol===v}">${t} <small>${n}</small></button>`;
   document.getElementById("picklist").innerHTML = `
-    <div class="pcols-tabs" role="tablist">${tab("sug","Sugeridos",nC)}${tab("greg","Gregoriano",nG)}${tab("tiempo","Tiempo",nT)}${tab("tema","Tema",nTe)}</div>
+    <div class="pcols-tabs" role="tablist">${tab("sug","Sugeridos",nC)}${tab("greg","Gregoriano",nG)}${POLI.length?tab("pol","Polifonías",pols.length):""}${tab("tiempo","Tiempo",nT)}${tab("tema","Tema",nTe)}</div>
     <div class="pcols" data-activa="${S._pcol}">
-      <section class="pcol">${({sug:colSug,greg:colGreg,tiempo:colTiempo,tema:colTema})[S._pcol]}</section>
+      <section class="pcol">${({sug:colSug,greg:colGreg,pol:colPol,tiempo:colTiempo,tema:colTema})[S._pcol]}</section>
     </div>`;
 }
 
@@ -1190,7 +1221,7 @@ function listaAlleluias(xs,q,fila){
 function abrirLectura(id){
   const c=canto(id); if(!c) return;
   const partes = sugeridas(c).map(k=>PARTE[k]?.n).filter(Boolean).join(", ");
-  hoja(c.greg? c.t : `Canto ${c.n}`, htmlCanto(c) + `<p class="hint">Sugerido para: ${esc(partes||"—")}${temasDe(c).length&&!c.greg?`<br>Temas: ${esc(temasDe(c).map(catNombre).join(", "))}`:""}${tiemposDe(c).length?`<br>Tiempo: ${esc(tiemposDe(c).map(k=>TIEMPO[k]).join(", "))}`:""}</p>`,
+  hoja(c.greg||c.pol? c.t : `Canto ${c.n}`, htmlCanto(c) + `<p class="hint">Sugerido para: ${esc(partes||"—")}${temasDe(c).length&&!c.greg?`<br>Temas: ${esc(temasDe(c).map(catNombre).join(", "))}`:""}${c.pol&&c.comp?`<br>Compositor: ${esc(c.comp)}`:""}${tiemposDe(c).length?`<br>Tiempo: ${esc(tiemposDe(c).map(k=>TIEMPO[k]).join(", "))}`:""}</p>`,
     `<button class="btn marcar" data-act="marcar" data-id="${esc(c.id)}" aria-pressed="${marcado(c.id)}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>${marcado(c.id)?"Marcado":"Marcar"}</span></button>`);
   $layer.querySelector(".sheet .canto").style.fontSize="1.15rem";
   pintarPartituras($layer, 1);
@@ -1807,6 +1838,36 @@ function leerPlanillas(planillas){
       if(L.length!==E.length) avisos.push(`Traducción de ${c}: el latín tiene ${L.length} partes y el castellano ${E.length}.`);
       trad[c]=L.map((x,j)=>[x.trim(),(E[j]||"").trim()]).filter(([a,b])=>a&&b); });
   });
+  // Planilla «Polifonías»: una fila por frase (Código, Título, Compositor, Parte, Tiempo, Indicación, Latín, Castellano, Visible)
+  let pol=null;
+  (planillas||[]).filter(p=>/^polifon/.test(norm(p.nombre))).forEach(p=>{
+    const filas=parseCSV(String(p.csv||"").replace(/^\uFEFF/,""));
+    const hi=filas.findIndex(r=>r.some(x=>norm(x).trim()==="codigo"));
+    if(hi<0){ avisos.push(`«${p.nombre}»: no tiene la columna «Código».`); return; }
+    const h=filas[hi].map(x=>norm(x).trim()), col=(...ks)=>h.findIndex(x=>ks.some(k=>x.startsWith(k)));
+    const iC=col("codigo"), iT=col("titulo"), iA=col("compositor","autor"), iP=col("parte"), iTi=col("tiempo"), iI=col("indicacion","rubrica"),
+      iL=col("latin","texto","original"), iE=col("castellano","traduccion","espanol"), iV=col("visible");
+    if(iL<0){ avisos.push(`«${p.nombre}»: falta la columna «Latín».`); return; }
+    pol=pol||[]; const porId={};
+    const lst=(r,i)=>i<0?[]:String(r[i]||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean);
+    filas.slice(hi+1).forEach(r=>{
+      const cod=String(r[iC]||"").trim().toLowerCase().replace(/\s+/g,""); if(!/^p\d+$/.test(cod)) return;
+      let c=porId[cod];
+      if(!c){ c=porId[cod]={id:cod, pol:true, n:"", t:"", comp:"", p:[], tiempos:[], temas:[], e:[], _ind:"", _blq:null}; pol.push(c); }
+      const v=k=>k<0?"":String(r[k]||"").trim();
+      if(v(iT)&&!c.t) c.t=v(iT);
+      if(v(iA)&&!c.comp) c.comp=v(iA);
+      lst(r,iP).forEach(x=>{const k=parteDe(x); if(k){ if(!c.p.includes(k)) c.p.push(k); } else avisos.push(`Polifonías, ${cod.toUpperCase()}: no se reconoce la parte «${x}».`)});
+      lst(r,iTi).forEach(x=>{const k=tiempoKey(x); if(k){ if(!c.tiempos.includes(k)) c.tiempos.push(k); } else avisos.push(`Polifonías, ${cod.toUpperCase()}: no se reconoce el tiempo «${x}».`)});
+      if(iV>=0 && ["no","n","0","oculto"].includes(norm(v(iV)))) c.oculto=true;
+      const la=v(iL), es=v(iE), ind=v(iI);
+      if(!la){ c._blq=null; return; }                       // fila vacía: cambio de estrofa
+      if(ind && norm(ind)!==norm(c._ind)){ c.e.push(["l",0,ind]); c._ind=ind; c._blq=null; }
+      if(!c._blq){ c._blq=["p",0,""]; c.e.push(c._blq); }
+      c._blq[2]+=(c._blq[2]?"\n":"")+la+(es?"\n~ "+es:"");
+    });
+  });
+  if(pol) pol=pol.filter(c=>{ delete c._ind; delete c._blq; c.f=c.comp; if(!c.t) c.t=c.id.toUpperCase(); return c.e.length; });
   // Planilla «Cantos»: una fila por canto (Número, Título, Partes, Temas, Tiempos, Visible)
   let fichas=null;
   (planillas||[]).filter(p=>/^cantos\b/.test(norm(p.nombre))).forEach(p=>{
@@ -1828,7 +1889,7 @@ function leerPlanillas(planillas){
       fichas[n]=f;
     });
   });
-  return {ocultos, avisos, trad, fichas};
+  return {ocultos, avisos, trad, fichas, pol};
 }
 // La planilla manda sobre el encabezado de cada documento
 function aplicarFichas(lista,fichas,avisos){
@@ -1913,9 +1974,9 @@ async function cargarCantoral(){
     aplicarFichas(lista,pl.fichas,pl.avisos);
     AVISOS=[...(data.errores||[]),...avisos,...pl.avisos];
     if(!lista.length) return false;
-    OCULTOS=pl.ocultos; TRAD_DRIVE=pl.trad||{}; _svgCache.clear();
+    OCULTOS=pl.ocultos; TRAD_DRIVE=pl.trad||{}; if(pl.pol) POLI=pl.pol; _svgCache.clear();
     BASE=lista; registrarGregorianos(BASE); _cache=null;
-    LS.set("cache",{c:lista,a:AVISOS,cats:CATS,o:[...OCULTOS],tr:TRAD_DRIVE,t:Date.now()});
+    LS.set("cache",{c:lista,a:AVISOS,cats:CATS,o:[...OCULTOS],tr:TRAD_DRIVE,pol:POLI,t:Date.now()});
     return true;
   }catch{ return false; }
 }
@@ -1935,7 +1996,7 @@ addEventListener("online",()=>toast("Conexión recuperada."));
   try{ localStorage.removeItem("cantoral:locales"); localStorage.removeItem("cantoral:director"); }catch{}
   // 1) La última versión guardada en este dispositivo, para abrir al instante
   const cache=LS.get("cache",null);
-  if(cache && Array.isArray(cache.c) && cache.c.length){ Object.assign(CATS,cache.cats||{}); BASE=cache.c; AVISOS=cache.a||[]; OCULTOS=new Set(cache.o||[]); TRAD_DRIVE=cache.tr||{}; registrarGregorianos(BASE); }
+  if(cache && Array.isArray(cache.c) && cache.c.length){ Object.assign(CATS,cache.cats||{}); BASE=cache.c; AVISOS=cache.a||[]; OCULTOS=new Set(cache.o||[]); TRAD_DRIVE=cache.tr||{}; POLI=cache.pol||[]; registrarGregorianos(BASE); }
   const rep=enlaceARep(); if(rep){S.shared=rep;S.mode="read";S.view="rep"}
   try{ history.replaceState({v:S.view},"",location.href); }catch{}
   // 2) La planilla: si no hay nada guardado, se espera; si lo hay, se actualiza después
