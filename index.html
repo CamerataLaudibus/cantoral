@@ -1087,7 +1087,7 @@ async function api(accion,datos){
 function salirEditor(){ LS.set("editor",null); SU.ed=null; try{ google.accounts.id.disableAutoSelect(); }catch{} renderSumar(); }
 
 /* ---- Estilo de la schola: j → i, ae → æ, tildes ---- */
-const TILDE=/[áéíóúýǽÁÉÍÓÚÝǼ]/;
+const TILDE=/[áéíóúýǽÁÉÍÓÚÝǼ\u0301]/;
 const nl=ch=>ch.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").normalize("NFC").replace("j","i");
 function palabrasGabc(g){   // letras del texto (fuera de neumas, etiquetas y corchetes) agrupadas por palabra, con su posición
   const i0=g.indexOf("%%"), out=[]; let w=null, sil=0, pend=false, k=i0>=0?i0+2:0;
@@ -1099,6 +1099,7 @@ function palabrasGabc(g){   // letras del texto (fuera de neumas, etiquetas y co
     if(c==="["){ const f=g.indexOf("]",k); k=f<0?g.length:f; continue; }
     if(c==="{"||c==="}") continue;
     if(/\s/.test(c)){ cerrar(); continue; }
+    if(c==="\u0301"){ if(w&&w.l.length) w.l[w.l.length-1].c+=c; continue; }   // tilde combinada (œ́)
     if(/[A-Za-zÀ-ÿæœǽǼÆŒ]/.test(c)){ (w=w||{l:[]}).l.push({c,k}); pend=true; }
     else if(w&&/[.,;:!?*†]/.test(c)) cerrar();
   }
@@ -1119,11 +1120,12 @@ function soloTexto(g,fn){   // aplica fn a los tramos de texto (no a neumas, eti
   const i=g.indexOf("%%"); const cab=i>=0?g.slice(0,i+2):"", cu=i>=0?g.slice(i+2):g;
   return cab+cu.replace(/(\([^)]*\)|<[^>]*>|\[[^\]]*\])|([^(<\[]+)/g,(m,prot,txt)=>prot?prot:fn(txt));
 }
-const ACENTO={a:"á",e:"é",i:"í",o:"ó",u:"ú",y:"ý","æ":"ǽ",A:"Á",E:"É",I:"Í",O:"Ó",U:"Ú",Y:"Ý","Æ":"Ǽ"};
+const ACENTO={a:"á",e:"é",i:"í",o:"ó",u:"ú",y:"ý","æ":"ǽ","œ":"œ\u0301",A:"Á",E:"É",I:"Í",O:"Ó",U:"Ú",Y:"Ý","Æ":"Ǽ","Œ":"Œ\u0301"};
 function aplicarEstilo(g,est){
   const faltan=[];
   if(est.j) g=soloTexto(g,t=>t.replace(/j/g,"i").replace(/J/g,"I"));
-  if(est.ae) g=soloTexto(g,t=>t.replace(/ae/g,"æ").replace(/oe/g,"œ").replace(/AE|Ae/g,"Æ").replace(/OE|Oe/g,"Œ").replace(/áe/g,"ǽ"));
+  if(est.ae) g=soloTexto(g,t=>t.replace(/áe|aé/g,"ǽ").replace(/óe|oé/g,"œ\u0301").replace(/ÁE|ÁÉ|AÉ|Áe|Aé/g,"Ǽ").replace(/ÓE|ÓÉ|OÉ|Óe|Oé/g,"Œ\u0301")
+    .replace(/ae/g,"æ").replace(/oe/g,"œ").replace(/AE|Ae/g,"Æ").replace(/OE|Oe/g,"Œ"));
   if(est.til){
     const D=diccionarioTildes(), arr=[...g];
     // índices de caracteres (no unidades UTF-16) para reemplazar con seguridad
