@@ -503,6 +503,34 @@ ul.lista li button.sin-n{grid-template-columns:1fr auto;padding-left:8px}
 .pcols-tabs{overflow-x:auto;scrollbar-width:none}.pcols-tabs::-webkit-scrollbar{display:none}
 .pcols-tabs button{flex:1 0 auto}
 ul.lista .sin-n .f{font-family:var(--sans);font-style:normal}
+
+/* ===== Sumar canto ===== */
+.secciones small.ed{font-size:var(--f-dato);color:var(--muted);margin-left:6px;font-weight:400}
+.gbtn{margin:20px 0;min-height:44px}
+.aviso-s{color:var(--rubric);margin:12px 0}
+.s-ed{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:var(--f-dato);margin:4px 0 10px}
+.s-fila{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.s-c{display:flex;flex-direction:column;gap:4px;flex:1 1 220px;margin:8px 0}
+.s-c>span{font-size:var(--f-dato);color:var(--muted);font-weight:600}
+.s-c.s-num{flex:0 0 96px}
+.s-traer{margin:8px 0}
+.s-gabc{font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;min-height:120px}
+.s-letra{font-family:var(--serif);font-size:1.05rem;line-height:1.5}
+.s-det{border-bottom:1px solid var(--line);padding:4px 0}
+.s-det>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;font-weight:600}
+.s-det>summary small{font-weight:400;color:var(--muted)}
+.chks{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 0 8px}
+.chk{display:flex;align-items:center;gap:8px;min-height:44px}
+.chk input{width:20px;height:20px;accent-color:var(--rubric)}
+.chk small{color:var(--muted)}
+.s-prev{border:1px solid var(--line);border-radius:var(--r-1);padding:10px 12px;background:var(--paper);min-height:60px}
+.s-ia{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.s-fr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.s-fr>span{font-family:var(--serif)}
+.s-fr input{font-style:italic;color:var(--glosa)}
+@media (max-width:560px){.s-fr{grid-template-columns:1fr;gap:4px}}
+.s-listo{display:flex;flex-direction:column;gap:6px;margin:20px 0;padding:14px;border-radius:var(--r-2);background:var(--perg)}
+.s-listo .btn{align-self:flex-start}
 </style>
 </head>
 <body>
@@ -765,6 +793,7 @@ function tituloVista(){
   if(S.view==="rep") return "Repertorio";
   if(S.view==="marcados") return "Marcados";
   if(S.view==="repertorios") return "Repertorios";
+  if(S.view==="sumar") return "Sumar canto";
   const s=S.sec||"";
   if(s==="gre") return "Gregoriano"; if(s==="him") return "Himnos"; if(s==="pol") return "Polifonías";
   if(s.startsWith("gre-")) return (SECC_GRE.find(x=>x[0]===s.slice(4))||[0,"Gregoriano"])[1];
@@ -779,6 +808,7 @@ function render(){
   if(S.view==="marcados"){renderMarcados();return}
   if(S.view==="repertorios"){renderRepertorios();return}
   if(S.view==="lib"){renderLib();return}
+  if(S.view==="sumar"){renderSumar();return}
   const lectura = S.mode!=="edit" && (S.shared || vigente);
   if(lectura) renderLectura(S.shared||vigente, !!S.shared);
   else renderEditor();
@@ -1021,12 +1051,269 @@ function medirTextoSistema(){
   }catch{}
 }
 addEventListener("visibilitychange",()=>{ if(!document.hidden) medirTextoSistema(); });
+
+/* ===================== Sumar canto (editores) =====================
+   Inicio de sesión con Google; el script de la carpeta comprueba la cuenta
+   y crea el documento del canto con su fila en «Cantos» o «Traducciones». */
+const CLIENTE_GOOGLE="398925451402-3jco3n4sa6aqjsjtst5t6mnv3a9cqq17.apps.googleusercontent.com";
+const nuevoGreg=()=>({fuente:"",gabc:"",num:"",tit:"",modo:"",partes:[],tiempos:[],es:{},estilo:LS.get("estilo",{j:true,ae:true,til:true})});
+const nuevoHimno=()=>({num:"",tit:"",partes:[],temas:"",tiempos:[],adf:false,letra:""});
+const SU={tipo:"gre",g:nuevoGreg(),hm:nuevoHimno(),ed:null,estado:"",ocupado:false};
+function sesionEditor(){ const s=LS.get("editor",null); return s && s.exp*1000>Date.now()+60000 ? s : null; }
+function jwtDatos(t){ try{ return JSON.parse(decodeURIComponent(escape(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))))); }catch{ return null; } }
+let _gsi=null;
+function cargarGSI(){ return _gsi||(_gsi=new Promise((ok,mal)=>{ const s=document.createElement("script"); s.src="https://accounts.google.com/gsi/client"; s.async=true; s.onload=ok; s.onerror=()=>{_gsi=null;mal(new Error("No se pudo cargar el inicio de sesión de Google."));}; document.head.appendChild(s); })); }
+async function botonGoogle(){
+  const el=document.getElementById("gbtn"); if(!el) return;
+  try{ await cargarGSI(); }catch(e){ el.innerHTML=`<p class="empty">${esc(e.message)}</p>`; return; }
+  google.accounts.id.initialize({client_id:CLIENTE_GOOGLE, auto_select:true, callback:async r=>{
+    const d=jwtDatos(r.credential); if(!d) return;
+    LS.set("editor",{t:r.credential,exp:d.exp,correo:d.email,nombre:d.name||d.email});
+    SU.ed=null; SU.estado="Comprobando el permiso…"; renderSumar();
+    try{ const x=await api("yo"); SU.ed=x; SU.estado=""; }catch(e){ SU.estado=e.message; LS.set("editor",null); }
+    renderSumar();
+  }});
+  google.accounts.id.renderButton(el,{theme:document.documentElement.dataset.theme==="dark"?"filled_black":"outline",size:"large",text:"continue_with",locale:"es",shape:"rectangular"});
+}
+async function api(accion,datos){
+  const s=sesionEditor(); if(!s) throw new Error("La sesión venció. Vuelve a entrar con Google.");
+  let r;
+  try{ r=await fetch(FUENTE,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({idToken:s.t,accion,datos:datos||{}})}); }
+  catch{ throw new Error("No hay conexión con la carpeta de cantos."); }
+  let x; try{ x=await r.json(); }catch{ throw new Error("El script de la carpeta todavía no tiene la versión para editores."); }
+  if(!x.ok) throw new Error(x.error||"No se pudo completar.");
+  return x;
+}
+function salirEditor(){ LS.set("editor",null); SU.ed=null; try{ google.accounts.id.disableAutoSelect(); }catch{} renderSumar(); }
+
+/* ---- Estilo de la schola: j → i, ae → æ, tildes ---- */
+const TILDE=/[áéíóúýǽÁÉÍÓÚÝǼ]/;
+const nl=ch=>ch.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").normalize("NFC").replace("j","i");
+function palabrasGabc(g){   // letras del texto (fuera de neumas, etiquetas y corchetes) agrupadas por palabra, con su posición
+  const i0=g.indexOf("%%"), out=[]; let w=null, sil=0, pend=false, k=i0>=0?i0+2:0;
+  const cerrar=()=>{ if(pend) sil++; if(w&&w.l.length){ w.sil=sil; out.push(w); } w=null; sil=0; pend=false; };
+  for(;k<g.length;k++){
+    const c=g[k];
+    if(c==="("){ const f=g.indexOf(")",k); if(pend){ sil++; pend=false; } k=f<0?g.length:f; continue; }
+    if(c==="<"){ const f=g.indexOf(">",k); k=f<0?g.length:f; continue; }
+    if(c==="["){ const f=g.indexOf("]",k); k=f<0?g.length:f; continue; }
+    if(c==="{"||c==="}") continue;
+    if(/\s/.test(c)){ cerrar(); continue; }
+    if(/[A-Za-zÀ-ÿæœǽǼÆŒ]/.test(c)){ (w=w||{l:[]}).l.push({c,k}); pend=true; }
+    else if(w&&/[.,;:!?*†]/.test(c)) cerrar();
+  }
+  cerrar(); return out;
+}
+let _dicc=null;
+function diccionarioTildes(){
+  if(_dicc) return _dicc; _dicc=new Map();
+  Object.values(GREG.gabc).forEach(g=>palabrasGabc(String(g)).forEach(w=>{
+    const s=w.l.map(x=>x.c).join(""); if(!TILDE.test(s)) return;
+    const key=[...s].map(nl).join(""), i=[...s].findIndex(ch=>TILDE.test(ch));
+    if(!_dicc.has(key)) _dicc.set(key,i);
+    const exp=key.replace(/æ/g,"ae").replace(/œ/g,"oe"); if(exp!==key && !_dicc.has(exp)){ const pre=key.slice(0,i); _dicc.set(exp, pre.replace(/æ/g,"ae").replace(/œ/g,"oe").length); }
+  }));
+  return _dicc;
+}
+function soloTexto(g,fn){   // aplica fn a los tramos de texto (no a neumas, etiquetas ni encabezado)
+  const i=g.indexOf("%%"); const cab=i>=0?g.slice(0,i+2):"", cu=i>=0?g.slice(i+2):g;
+  return cab+cu.replace(/(\([^)]*\)|<[^>]*>|\[[^\]]*\])|([^(<\[]+)/g,(m,prot,txt)=>prot?prot:fn(txt));
+}
+const ACENTO={a:"á",e:"é",i:"í",o:"ó",u:"ú",y:"ý","æ":"ǽ",A:"Á",E:"É",I:"Í",O:"Ó",U:"Ú",Y:"Ý","Æ":"Ǽ"};
+function aplicarEstilo(g,est){
+  const faltan=[];
+  if(est.j) g=soloTexto(g,t=>t.replace(/j/g,"i").replace(/J/g,"I"));
+  if(est.ae) g=soloTexto(g,t=>t.replace(/ae/g,"æ").replace(/oe/g,"œ").replace(/AE|Ae/g,"Æ").replace(/OE|Oe/g,"Œ").replace(/áe/g,"ǽ"));
+  if(est.til){
+    const D=diccionarioTildes(), arr=[...g];
+    // índices de caracteres (no unidades UTF-16) para reemplazar con seguridad
+    const pos=[]; { let u=0; for(let c=0;c<arr.length;c++){ pos.push(u); u+=arr[c].length; } }
+    const deU=new Map(pos.map((u,c)=>[u,c]));
+    palabrasGabc(g).forEach(w=>{
+      const s=w.l.map(x=>x.c).join(""); if(w.sil<3 || TILDE.test(s) || w.l.length<4) return;
+      const key=w.l.map(x=>nl(x.c)).join(""), i=D.get(key);
+      if(i==null){ if(/^[a-zæœ]+$/i.test(key)) faltan.push(s); return; }
+      const L=w.l[i]; if(!L) return; const ci=deU.get(L.k); const r=ACENTO[arr[ci]]; if(r) arr[ci]=r;
+    });
+    g=arr.join("");
+  }
+  return {g,faltan:[...new Set(faltan)]};
+}
+/* ---- Frases del latín, para la traducción ---- */
+function frasesGabc(g){
+  const out=[]; let cur=[];
+  const i0=g.indexOf("%%"); let cu=(i0>=0?g.slice(i0+2):g).replace(/<sp>V\/<\/sp>\.?/g," | ").replace(/<sp>R\/<\/sp>\.?/g," | ");
+  cu=cu.replace(/\([^)]*\)/g,"").replace(/<[^>]*>/g,"").replace(/\[[^\]]*\]/g,"").replace(/[{}]/g,"");
+  cu.split(/\s+/).forEach(w=>{ if(!w || /^(Ps|Cant|T|P)\.$/.test(w)) return;
+    if(w==="|"||w==="*"||w==="†"){ if(cur.length){ out.push(cur.join(" ")); cur=[]; } return; }
+    cur.push(w.replace(/[*†]/g,"")); if(/[.,;:!?]$/.test(w)){ out.push(cur.join(" ")); cur=[]; } });
+  if(cur.length) out.push(cur.join(" "));
+  return out.map(x=>x.trim()).filter(x=>x && !/^e u o u a e\.?$/i.test(x) && /[A-Za-zÀ-ÿæœ]/.test(x));
+}
+function gregFinal(){ const G=SU.g; const r=aplicarEstilo(G.gabc,G.estilo); return r; }
+function numeroLibreLocal(){ const usados=new Set(BASE.map(c=>+c.n).filter(Boolean)); let n=1; usados.forEach(x=>{ if(x>=n) n=x+1; }); return n; }
+
+/* ---- Pantalla ---- */
+function chk(campo,valor,lista,etiq){ return `<label class="chk"><input type="checkbox" data-in="s:${campo}" value="${esc(valor)}" ${lista.includes(valor)?"checked":""}><span>${esc(etiq)}</span></label>`; }
+function renderSumar(){
+  $bar.innerHTML="";
+  const s=sesionEditor();
+  if(!s || !SU.ed){
+    $main.innerHTML=`<h2 class="pag-t">Sumar canto</h2>
+      <p class="pag-sub">Para sumar himnos y gregorianos a la carpeta de cantos hay que entrar con una cuenta de Google que figure en la planilla «Editores».</p>
+      ${SU.estado?`<p class="aviso-s">${esc(SU.estado)}</p>`:""}
+      <div id="gbtn" class="gbtn"><p class="cargando">Cargando…</p></div>
+      <p class="hint">Quien solo canta no necesita entrar: el Cantoral se usa sin cuenta.</p>`;
+    if(s && !SU.ed && !SU.estado){ SU.estado="Comprobando el permiso…"; api("yo").then(x=>{SU.ed=x;SU.estado="";renderSumar();}).catch(e=>{SU.estado=e.message;LS.set("editor",null);renderSumar();}); }
+    botonGoogle(); return;
+  }
+  const tab=(v,t)=>`<button data-act="sTipo" data-v="${v}" aria-pressed="${SU.tipo===v}">${t}</button>`;
+  $main.innerHTML=`<div class="s-ed"><span>${esc(SU.ed.nombre)}</span><button class="mini" data-act="sSalir">Salir</button></div>
+    <div class="segm" role="group" aria-label="Tipo de canto">${tab("gre","Gregoriano")}${tab("him","Himno")}</div>
+    <div id="sform">${SU.tipo==="gre"?formGreg():formHimno()}</div>`;
+  $bar.innerHTML=`<div class="actions"><div class="actions-in"><button class="btn primary" data-act="sGuardar" ${SU.ocupado?"disabled":""}>${SU.ocupado?"Guardando…":"Guardar en la carpeta"}</button></div></div>`;
+  if(SU.tipo==="gre") vistaGreg(); else vistaHimno();
+}
+function camposComunes(o){
+  return `<div class="s-fila"><label class="s-c s-num"><span>Número</span><input class="field" inputmode="numeric" data-in="s:num" value="${esc(o.num)}" placeholder="${numeroLibreLocal()}"></label>
+    <label class="s-c"><span>Título</span><input class="field" data-in="s:tit" value="${esc(o.tit)}"></label></div>
+    <details class="s-det"${o.partes.length?" open":""}><summary>Partes de la Misa <small>${o.partes.length?esc(o.partes.map(k=>PARTE[k].n).join(", ")):"opcional"}</small></summary><div class="chks">${PARTES.map(p=>chk("partes",p.k,o.partes,p.n)).join("")}</div></details>
+    <details class="s-det"${o.tiempos.length?" open":""}><summary>Tiempo litúrgico <small>${o.tiempos.length?esc(o.tiempos.map(k=>TIEMPO[k]).join(", ")):"opcional"}</small></summary><div class="chks">${TIEMPOS.map(([k,n])=>chk("tiempos",k,o.tiempos,n)).join("")}</div></details>`;
+}
+function formGreg(){
+  const G=SU.g, e=G.estilo;
+  return `<h3 class="cat">1 · Partitura</h3>
+    <div class="s-fila"><label class="s-c"><span>GregoBase (número o enlace)</span><input class="field" data-in="s:fuente" value="${esc(G.fuente)}" placeholder="p. ej. 1234"></label><button class="btn s-traer" data-act="sTraer">Traer</button></div>
+    <label class="s-c"><span>Código GABC</span><textarea class="field s-gabc" data-in="s:gabc" rows="6" spellcheck="false" placeholder="Pega aquí el GABC, o tráelo de GregoBase">${esc(G.gabc)}</textarea></label>
+    <h3 class="cat">2 · Datos</h3>
+    ${camposComunes(G)}
+    <label class="s-c s-num"><span>Modo</span><input class="field" inputmode="numeric" data-in="s:modo" value="${esc(G.modo)}"></label>
+    <h3 class="cat">3 · Estilo de la schola</h3>
+    <div class="chks">
+      <label class="chk"><input type="checkbox" data-in="s:est" value="j" ${e.j?"checked":""}><span>j → i <small>(eius, Iesu)</small></span></label>
+      <label class="chk"><input type="checkbox" data-in="s:est" value="ae" ${e.ae?"checked":""}><span>ae → æ, oe → œ</span></label>
+      <label class="chk"><input type="checkbox" data-in="s:est" value="til" ${e.til?"checked":""}><span>Tildes en palabras de tres sílabas o más</span></label>
+    </div>
+    <div id="sFaltan"></div>
+    <h3 class="cat">4 · Vista previa</h3>
+    <div class="s-prev"><div class="partitura" data-g="_nuevo"><p class="cargando">Pega o trae una partitura.</p></div></div>
+    <h3 class="cat">5 · Traducción</h3>
+    <p class="hint">Una casilla por frase. Lo que escribas aparece debajo de la partitura.</p>
+    <div class="s-ia"><button class="btn" data-act="sIA">Copiar pedido para IA</button><button class="btn" data-act="sPegar">Pegar respuesta</button></div>
+    <div id="sFrases"></div>
+    <div id="sOk"></div>`;
+}
+function formHimno(){
+  const H=SU.hm;
+  return `${camposComunes(H)}
+    <label class="s-c"><span>Temas <small>separados por comas</small></span><input class="field" data-in="s:temas" list="sTemas" value="${esc(H.temas)}"><datalist id="sTemas">${Object.values(CATS).map(c=>`<option value="${esc(c.n)}">`).join("")}</datalist></label>
+    <label class="chk"><input type="checkbox" data-in="s:adf" ${H.adf?"checked":""}><span>Versión ADF</span></label>
+    <h3 class="cat">Letra</h3>
+    <p class="hint">Cada estrofa empieza con su número («1. »). Lo que no tiene número es el estribillo. Deja una línea en blanco entre estrofas.</p>
+    <textarea class="field s-letra" data-in="s:letra" rows="12">${esc(H.letra)}</textarea>
+    <h3 class="cat">Vista previa</h3><div class="s-prev" id="sHprev"></div><div id="sOk"></div>`;
+}
+let _sRz=null;
+function vistaGreg(){
+  clearTimeout(_sRz); _sRz=setTimeout(()=>{
+    const G=SU.g; const fin=gregFinal();
+    const f=document.getElementById("sFaltan"); if(f) f.innerHTML=fin.faltan.length&&G.estilo.til?`<p class="hint">Sin tilde (no las encontré en el Cantoral; si hace falta, agrégala en el código): <i>${fin.faltan.map(esc).join(", ")}</i></p>`:"";
+    const fr=frasesGabc(fin.g); G._fr=fr;
+    const box=document.getElementById("sFrases");
+    if(box && box.dataset.k!==fr.join("|")){ box.dataset.k=fr.join("|");
+      box.innerHTML=fr.length? fr.map((x,i)=>`<label class="s-fr"><span>${esc(x)}</span><input class="field" data-in="s:es" data-i="${i}" value="${esc(G.es[x]||"")}"></label>`).join("") : `<p class="hint">Aparecerá cuando haya una partitura.</p>`; }
+    const prev=document.querySelector('.s-prev .partitura'); if(!prev) return;
+    if(!/\(/.test(fin.g)){ prev.innerHTML=`<p class="cargando">Pega o trae una partitura.</p>`; return; }
+    GREG.gabc._nuevo=normalizarGabc(fin.g,G.modo);
+    TRAD_DRIVE._nuevo=fr.map(x=>[x,G.es[x]||""]).filter(p=>p[1]);
+    [..._svgCache.keys()].forEach(k=>{ if(k.startsWith("_nuevo@")) _svgCache.delete(k); });
+    prev.dataset.w=""; pintarPartituras(document.querySelector(".s-prev"),1);
+  },250);
+}
+function vistaHimno(){
+  const H=SU.hm, el=document.getElementById("sHprev"); if(!el) return;
+  el.innerHTML = H.letra.trim()? htmlCanto({n:H.num||numeroLibreLocal(),t:H.tit||"Sin título",e:parsearTexto(H.letra),temas:[]}) : `<p class="hint">Aparecerá al escribir la letra.</p>`;
+}
+function entradaSumar(el,k){
+  const o=SU.tipo==="gre"?SU.g:SU.hm;
+  if(k==="partes"||k==="tiempos"){ const v=el.value; o[k]=el.checked?[...new Set(o[k].concat(v))]:o[k].filter(x=>x!==v); const sm=el.closest("details")?.querySelector("summary small"); if(sm) sm.textContent=o[k].length?o[k].map(x=>k==="partes"?PARTE[x].n:TIEMPO[x]).join(", "):"opcional"; return; }
+  if(k==="est"){ SU.g.estilo[el.value]=el.checked; LS.set("estilo",SU.g.estilo); vistaGreg(); return; }
+  if(k==="adf"){ SU.hm.adf=el.checked; return; }
+  if(k==="es"){ const x=(SU.g._fr||[])[+el.dataset.i]; if(x!=null){ SU.g.es[x]=el.value; vistaGreg(); } return; }
+  o[k]=el.value;
+  if(SU.tipo==="gre" && k==="gabc" && /%%/.test(el.value)){   // GABC pegado con encabezado: título y modo
+    const c=leerCabeceraGabc(el.value), f=document.getElementById("sform");
+    if(!SU.g.tit && c.nombre){ SU.g.tit=c.nombre; const i=f.querySelector('[data-in="s:tit"]'); if(i) i.value=c.nombre; }
+    if(!SU.g.modo && c.modo){ SU.g.modo=c.modo; const i=f.querySelector('[data-in="s:modo"]'); if(i) i.value=c.modo; }
+  }
+  if(SU.tipo==="gre" && (k==="gabc"||k==="modo")) vistaGreg();
+  if(SU.tipo==="him") vistaHimno();
+}
+function leerCabeceraGabc(t){
+  const i=t.indexOf("%%"), cab=i>=0?t.slice(0,i):"", get=k=>(cab.match(new RegExp("^"+k+":\\s*([^;\\n]*)","mi"))||[])[1]||"";
+  return {nombre:get("name").trim(), modo:(get("mode").match(/[1-8]/)||[""])[0], cuerpo:i>=0?t.slice(i+2).replace(/^\s*\n/,""):t};
+}
+async function traerGregoBase(){
+  const G=SU.g, id=(String(G.fuente).match(/(?:id=|\/chant\/|^)\s*(\d+)/)||[])[1];
+  if(!id){ toast("Escribe el número de GregoBase o pega su enlace."); return; }
+  toast("Trayendo la partitura…");
+  try{
+    const x=await api("gregobase",{id}); const c=leerCabeceraGabc(x.gabc);
+    G.gabc=c.cuerpo.trim(); if(!G.tit) G.tit=c.nombre.replace(/\s*\((Intr|Grad|Off|Comm|All|Tract|Seq|Ant|Hymn)\.?\)\s*$/i,""); if(!G.modo) G.modo=c.modo;
+    renderSumar(); toast("Partitura traída de GregoBase.");
+  }catch(e){ toast(e.message); }
+}
+function copiarPedidoIA(){
+  const fr=SU.g._fr||[]; if(!fr.length){ toast("Primero pega o trae la partitura."); return; }
+  const t=`Traduce al castellano estas frases latinas de un canto gregoriano de la Misa. Usa el estilo de las traducciones litúrgicas (con «vosotros»), una traducción por frase, que se entienda leída debajo de cada frase. Devuelve solo las líneas numeradas, en el mismo orden:\n\n`+fr.map((x,i)=>`${i+1}. ${x}`).join("\n");
+  navigator.clipboard.writeText(t).then(()=>toast("Pedido copiado. Pégalo en la IA y trae su respuesta con «Pegar respuesta»."),()=>{ hoja("Pedido para IA",`<textarea class="field" rows="12" readonly>${esc(t)}</textarea>`); });
+}
+function pegarRespuestaIA(){
+  hoja("Pegar respuesta de la IA",`<p class="hint">Pega las líneas numeradas que devolvió la IA. Cada número va a su frase.</p><textarea class="field" id="sResp" rows="12"></textarea>`,
+    `<button class="btn" data-act="cerrar">Cancelar</button><button class="btn primary" data-act="sPegarOk">Aplicar</button>`);
+  setTimeout(()=>document.getElementById("sResp")?.focus(),50);
+}
+function aplicarRespuestaIA(){
+  const t=document.getElementById("sResp")?.value||"", fr=SU.g._fr||[]; let n=0;
+  t.split("\n").forEach(l=>{ const m=l.match(/^\s*(\d+)\s*[.)\-:–]\s*(.+)$/); if(m && fr[+m[1]-1]!=null){ SU.g.es[fr[+m[1]-1]]=m[2].trim(); n++; } });
+  cerrarCapa(); const box=document.getElementById("sFrases"); if(box) box.dataset.k=""; vistaGreg(); toast(n?`${n} traducciones aplicadas.`:"No encontré líneas numeradas.");
+}
+async function guardarSumar(){
+  if(SU.ocupado) return;
+  const gre=SU.tipo==="gre", o=gre?SU.g:SU.hm;
+  const num=parseInt(o.num||numeroLibreLocal(),10);
+  if(BASE.some(c=>+c.n===num)){ toast(`El número ${num} ya está en uso.`); return; }
+  if(!o.tit.trim()){ toast("Falta el título."); return; }
+  const nombres=(ks,M)=>ks.map(k=>M(k));
+  let datos;
+  if(gre){
+    const fin=gregFinal(); if(!/\(/.test(fin.g)){ toast("Falta la partitura."); return; }
+    const fr=frasesGabc(fin.g), hay=fr.filter(x=>(o.es[x]||"").trim());
+    datos={numero:num,titulo:o.tit.trim(),modo:o.modo,partes:nombres(o.partes,k=>PARTE[k].n),tiempos:nombres(o.tiempos,k=>TIEMPO[k]),
+      gabc:(o.modo?`mode:${o.modo};\n`:"")+"%%\n"+leerCabeceraGabc(fin.g).cuerpo.trim(),
+      latin:hay, castellano:hay.map(x=>o.es[x].trim())};
+  } else {
+    if(!o.letra.trim()){ toast("Falta la letra."); return; }
+    datos={numero:num,titulo:o.tit.trim(),partes:nombres(o.partes,k=>PARTE[k].n),tiempos:nombres(o.tiempos,k=>TIEMPO[k]),
+      temas:o.temas.split(",").map(x=>x.trim()).filter(Boolean),adf:o.adf,letra:o.letra};
+  }
+  SU.ocupado=true; renderSumar();
+  try{
+    await api(gre?"guardarGregoriano":"guardarHimno",datos);
+    SU.ocupado=false; renderSumar();
+    document.getElementById("sOk").innerHTML=`<div class="s-listo"><b>Guardado: ${esc(datos.numero+" · "+datos.titulo)}</b><span>Ya está en la carpeta. En un momento aparece en el Cantoral.</span><button class="btn" data-act="sOtro">Sumar otro</button></div>`;
+    document.getElementById("sOk").scrollIntoView({behavior:"smooth",block:"center"});
+    if(await cargarCantoral()) refrescar();
+  }catch(e){ SU.ocupado=false; renderSumar(); toast(e.message); }
+}
+
 function abrirMenu(){
   hoja("Opciones",`<ul class="secciones">
     <li><button data-act="theme"><span>Modo claro u oscuro</span><span class="chev">›</span></button></li>
     <li><button data-act="ui"><span>Tamaño de la letra</span><span class="chev">›</span></button></li>
     ${CARPETA_URL.startsWith("http")?`<li><button data-act="carpeta"><span>Abrir la carpeta de cantos</span><span class="chev">↗</span></button></li>`:""}
     ${AVISOS.length?`<li><button data-act="avisos"><span>Avisos de la carpeta</span><small>${AVISOS.length}</small></button></li>`:""}
+    <li><button data-act="sumar"><span>Sumar canto <small class="ed">editores</small></span><span class="chev">›</span></button></li>
     <li><button data-act="acerca"><span>Acerca del Cantoral</span><span class="chev">›</span></button></li></ul>`);
 }
 function renderLib(){
@@ -1394,6 +1681,15 @@ document.addEventListener("click",async e=>{
     case "trad": { S.trad= d.v!=null ? d.v==="1" : !S.trad; LS.set("trad",S.trad); document.documentElement.dataset.trad=S.trad?"si":"no"; toast(S.trad?"Traducción visible.":"Traducción oculta.");
       if(S._enCoro) pintarCoro(false); else { $layer.querySelectorAll(".trad-btn").forEach(b=>b.setAttribute("aria-pressed",S.trad)); $layer.querySelectorAll(".partitura[data-g]").forEach(e=>e.dataset.w=""); pintarPartituras($layer,1); } break; }
     case "fondo": case "cerrar": cerrarCapa(); break;
+    case "sumar": cerrarCapa(); navegar("sumar"); break;
+    case "sTipo": SU.tipo=d.v; renderSumar(); break;
+    case "sSalir": salirEditor(); break;
+    case "sTraer": traerGregoBase(); break;
+    case "sIA": copiarPedidoIA(); break;
+    case "sPegar": pegarRespuestaIA(); break;
+    case "sPegarOk": aplicarRespuestaIA(); break;
+    case "sGuardar": guardarSumar(); break;
+    case "sOtro": SU.g=nuevoGreg(); SU.hm=nuevoHimno(); renderSumar(); window.scrollTo(0,0); break;
     case "deshacer": if(S._undo){ const x=S._undo; S._undo=null; restaurar(x); toast("Cambio deshecho."); } break;
     case "cat": S.cat=d.c; render(); break;
     case "leer": abrirLectura(d.id); break;
@@ -1441,8 +1737,10 @@ document.addEventListener("click",async e=>{
   }
 });
 document.addEventListener("keydown",e=>{ const el=e.target.closest?.("li[data-act]"); if(el && (e.key==="Enter"||e.key===" ")){e.preventDefault();el.click()} });
+document.addEventListener("change",e=>{ const el=e.target, k=el.dataset?.in; if(k&&k.startsWith("s:")) entradaSumar(el,k.slice(2)); });
 document.addEventListener("input",e=>{
   const el=e.target, k=el.dataset?.in; if(!k) return;
+  if(k.startsWith("s:")){ entradaSumar(el,k.slice(2)); return; }
   if(k==="q"){S.q=el.value;S._focusQ=true;render();return}
   if(k==="qh"){S.qh=el.value;S._focusQh=true;renderInicio();return}
   if(k==="t"||k==="d"){S.rep[k]=el.value;guardarBorrador();return}
