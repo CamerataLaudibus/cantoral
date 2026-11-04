@@ -1402,6 +1402,7 @@ function htmlCanto(c,nota,parte){
       <div><h1>${esc(c.t)}</h1><div class="cat">${esc(temasTexto(c))}</div></div>${tieneGlosa(c)?`<button class="trad-btn" data-act="trad" aria-pressed="${!!S.trad}">Traducción</button>`:""}</div>`}
     ${nota?`<p class="obs">${esc(nota)}</p>`:""}
     ${e.map(x=> x[0]==="v" ? `<p class="b v"><span class="k">${x[1]}.</span>${txtGlosa(x[2])}</p>`
+             : x[0]==="r" && !e.some(y=>y[0]==="v") ? `<p class="b">${txtGlosa(x[2])}</p>`   // texto de corrido, sin estrofas numeradas
              : x[0]==="r" ? `<p class="b r"><span class="k" aria-label="Estribillo">℟.</span>${txtGlosa(x[2])}</p>`
              : `<p class="b l">${txtGlosa(x[2])}</p>`).join("")}
   </article>`;
@@ -1986,7 +1987,10 @@ function aplicarPropio(k){
 function gabcCuerpo(g){ const i=g.indexOf('%%'); return i>=0? g.slice(i+2).replace(/^\s*\n/,'') : g; }
 function gabcModo(g){ const m=g.match(/^mode:\s*([1-8])/m); return m? +m[1] : 0; }
 function gabcParaExsurge(g){
-  return g.replace(/<v>\\([VRA])bar<\/v>/g,(m,b)=>b+'/.')
+  return g.replace(/<i>(Ps\.|Cant\.)<\/i>\s*/g,'^$1^ ')            // «Ps.» del Introito, en rojo como rúbrica
+    .replace(/(^|[\s)])Ps\.\s+(?=[A-ZÁÉÍÓÚ])/gm,'$1^Ps.^ ')
+    .replace(/<c>\*\*<\/c>\(([^)]*)\)/g,'\u0001($1)')                       // doble asterisco: se protege y se repone al final
+    .replace(/<v>\\([VRA])bar<\/v>/g,(m,b)=>b+'/.')
     .replace(/<sp>([VRA])\/<\/sp>\.?/g,(m,b)=>b+'/.')
     .replace(/(\)\s+)([^()]*V\/\.\s*\d+\.?)(?=[ (])/g,'$1^$2^')
     .replace(/\\emph{([^(}]+)\}/g,'_$1_')
@@ -2006,7 +2010,8 @@ function gabcParaExsurge(g){
     .replace(/<\/?c>/g,'')
     .replace(/<sp>'?(ae|æ)<\/sp>/g,'ǽ').replace(/<sp>'?(oe|œ)<\/sp>/g,'œ')
     .replace(/(\s\^?\*\^?)(?=\s*[^(])/g,' *()')
-    .replace(/(\))\s*\(\)/g,')');
+    .replace(/(\))\s*\(\)/g,')')
+    .replace(/\u0001/g,'**');
 }
 const ROMANO_MODO=['','i','ii','iii','iv','v','vi','vii','viii'];
 function contextoExsurge(){
@@ -2265,7 +2270,6 @@ function desdeArchivos(lista){
     const keys=[]; (datos.partes||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(norm(x).startsWith("acto penitencial")) return; const k=parteDe(x); if(k) keys.push(k); else avisos.push(`${ref}: no se reconoce la parte «${x}».`)});
     if(keys.length) c.p=keys;
     if(["no","n","0","oculto"].includes(norm(datos.visible||""))) c.oculto=true;
-    if(!esGreg && c.e.length && !c.e.some(x=>x[0]==="v") && c.e.length>1) avisos.push(`${ref}: ninguna estrofa tiene número; revisar que no se haya convertido en lista automática.`);
     cantos.push(c);
   }
   return {cantos, avisos};
