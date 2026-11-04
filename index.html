@@ -888,7 +888,11 @@ function navegar(v,sec){
 }
 function volver(){ if(_prof>0){ history.back(); } else { S.view="inicio"; S.sec=null; render(); window.scrollTo(0,0); } }
 window.addEventListener("popstate",e=>{
-  const st=e.state||{v:"inicio"}; _prof=Math.max(0,_prof-1);
+  const st=e.state||{v:"inicio"};
+  if(_popIgnorar){ _popIgnorar--; return; }
+  if(S._enCoro && S._coro && S._coro.idx && st.capa!=="pane"){ S._coro.idx=false; pintarCoro(false); return; }   // cierra la barra del orden
+  if(S._enCoro && !st.capa){ cerrarCapa(); return; }                                                              // sale del modo cantar
+  _prof=Math.max(0,_prof-1);
   if(S._enCoro || $layer.innerHTML){ cerrarCapa(); }
   S.view=st.v||"inicio"; S.sec=st.sec||null; render(); window.scrollTo(0,0);
 });
@@ -1664,8 +1668,21 @@ function secuencia(rep){
   [...rep.p].sort((a,b)=>(PARTE[a.k]?.i??99)-(PARTE[b.k]?.i??99)).forEach(p=>p.s.forEach((id,si)=>out.push({k:p.k,id,c:canto(id),nota:si===0?p.nota:""})));
   return out;
 }
+// El modo cantar y la barra del orden ocupan un lugar en el historial: «atrás» los cierra sin salir de la app
+let _popIgnorar=0;
+function pushCapa(tipo){ try{ history.pushState({...(history.state||{}),capa:tipo},"",location.href); }catch{} }
+function capaActual(){ return (history.state&&history.state.capa)||null; }
+function cerrarIndice(saltar){
+  if(!S._coro) return; S._coro.idx=false; pintarCoro(!!saltar);
+  if(capaActual()==="pane"){ _popIgnorar++; history.back(); }
+}
+function cerrarCoro(){
+  const c=capaActual(); cerrarCapa();
+  if(c==="pane"){ _popIgnorar++; history.go(-2); } else if(c==="coro"){ _popIgnorar++; history.back(); }
+}
 function abrirCoro(rep,i){
   const items=secuencia(rep); if(!items.length) return;
+  if(!S._enCoro) pushCapa("coro");
   S._coro={items,i:Math.max(0,Math.min(i,items.length-1)),rep,idx:false,oculto:false,pista:items.length>1&&!LS.get("pistaDesliz",0)}; S._enCoro=true;
   pintarCoro(true);
   document.addEventListener("keydown",teclasCoro);
@@ -1688,7 +1705,7 @@ function pintarCoro(scrollTop,entra){
       ${next?`<button class="coro-sig" data-act="mover" data-d="1"><small>Siguiente</small>${esc(PARTE[next.k]?.n||"")} · ${esc(next.c?.t||"")} →</button>`:`<p class="coro-fin">Fin del repertorio</p>`}</div></div>
     ${idx?`<div class="pane"><div class="sheet-h"><h3>Orden de la Misa</h3><button class="iconbtn" data-act="indice" aria-label="Cerrar">✕</button></div>
       <p class="pane-rep">${i+1} de ${items.length}${S._coro.rep.t?" · "+esc(S._coro.rep.t):""}</p>
-      <ol>${items.map((x,j)=>`<li><button data-act="ir" data-i="${j}" aria-current="${j===i}"><span class="p">${esc(PARTE[x.k]?.n)}</span><span class="t">${esc(x.c?rotulo(x.c):"—")}</span></button></li>`).join("")}</ol>
+      <ol>${items.map((x,j)=>`<li><button data-act="irCoro" data-i="${j}" aria-current="${j===i}"><span class="p">${esc(PARTE[x.k]?.n)}</span><span class="t">${esc(x.c?rotulo(x.c):"—")}</span></button></li>`).join("")}</ol>
       <div class="opts">
         <div class="row"><span>Modo oscuro</span>
           <span class="seg"><button data-act="temaCoro" data-v="light" aria-pressed="${!oscuro}">No</button><button data-act="temaCoro" data-v="dark" aria-pressed="${oscuro}">Sí</button></span></div>
@@ -1702,6 +1719,7 @@ function pintarCoro(scrollTop,entra){
   const coro=$layer.querySelector(".coro"), b=document.getElementById("coroB"), pag=b.querySelector(".coro-pag");
   b.style.setProperty("--lec",(S.lec*16)+"px");
   if(scrollTop) b.scrollTop=0;
+  if(S._coro.idx) coro.addEventListener("click",e=>{ if(e.target.closest(".pane")||e.target.closest('[data-act="indice"]')) return; e.stopPropagation(); e.preventDefault(); cerrarIndice(false); },true);
   pintarPartituras(b, zoomCoro()).then(()=>precargarSiguiente());
   // Barras: se esconden al bajar, vuelven al subir o con un toque
   const ver=v=>{ S._coro.oculto=!v; coro.classList.toggle("oculto",!v); };
@@ -1761,7 +1779,7 @@ document.addEventListener("click",async e=>{
     case "esc": { const v=d.v; if(v==="n") delete document.documentElement.dataset.esc; else document.documentElement.dataset.esc=v; LS.set("escala",v); medirTextoSistema(); abrirTamano(); break; }
     case "trad": { S.trad= d.v!=null ? d.v==="1" : !S.trad; LS.set("trad",S.trad); document.documentElement.dataset.trad=S.trad?"si":"no"; toast(S.trad?"Traducción visible.":"Traducción oculta.");
       if(S._enCoro) pintarCoro(false); else { $layer.querySelectorAll(".trad-btn").forEach(b=>b.setAttribute("aria-pressed",S.trad)); $layer.querySelectorAll(".partitura[data-g]").forEach(e=>e.dataset.w=""); pintarPartituras($layer,1); } break; }
-    case "fondo": case "cerrar": cerrarCapa(); break;
+    case "fondo": case "cerrar": if(S._enCoro) cerrarCoro(); else cerrarCapa(); break;
     case "sumar": cerrarCapa(); navegar("sumar"); break;
     case "sTipo": SU.tipo=d.v; renderSumar(); break;
     case "sSalir": salirEditor(); break;
@@ -1789,8 +1807,8 @@ document.addEventListener("click",async e=>{
     case "vaciar": { const snap=instantanea(); cerrarCapa();guardarEnLista(S.rep);S.rep=nuevoRep();S._nombre=false;LS.set("borrador",S.rep);render(); toastDeshacer("Repertorio nuevo. El anterior quedó en Repertorios.",snap); break; }
     case "cantar": { const rep = S.mode==="edit" || !S.shared ? S.rep : S.shared; abrirCoro(rep,+d.i||0); break; }
     case "mover": moverCoro(+d.d); break;
-    case "ir": S._coro.i=+d.i; S._coro.idx=false; pintarCoro(true); break;
-    case "indice": S._coro.idx=!S._coro.idx; S._coro.oculto=false; pintarCoro(false); break;
+    case "irCoro": S._coro.i=+d.i; cerrarIndice(true); break;
+    case "indice": if(S._coro.idx) cerrarIndice(false); else { S._coro.idx=true; S._coro.oculto=false; pushCapa("pane"); pintarCoro(false); } break;
     case "temaCoro": document.documentElement.dataset.theme=d.v; LS.set("tema",d.v); pintarCoro(false); break;
     case "lec": S.lec=Math.max(.95,Math.min(2.4,+(S.lec+(+d.d)*.12).toFixed(2))); LS.set("lec",S.lec); document.getElementById("coroB").style.setProperty("--lec",(S.lec*16)+"px"); pintarPartituras(document.getElementById("coroB"), zoomCoro()); break;
     case "coroR": S.coroR=d.v==="1"; LS.set("coroR",S.coroR); pintarCoro(false); break;
