@@ -2118,6 +2118,7 @@ function gabcParaExsurge(g){
     .replace(/<sp>'?(ae|æ)<\/sp>/g,'ǽ').replace(/<sp>'?(oe|œ)<\/sp>/g,'œ')
     .replace(/(\s\^?\*\^?)(?=\s*[^(])/g,' *()')
     .replace(/(\))\s*\(\)/g,')')
+    .replace(/(^|[^^])†(?!\^)/gm,'$1^†^')                          // toda cruz (†), en rojo
     .replace(/\u0001/g,'**');
 }
 const ROMANO_MODO=['','i','ii','iii','iv','v','vi','vii','viii'];
