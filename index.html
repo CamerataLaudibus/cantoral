@@ -1058,7 +1058,10 @@ addEventListener("visibilitychange",()=>{ if(!document.hidden) medirTextoSistema
 const CLIENTE_GOOGLE="398925451402-3jco3n4sa6aqjsjtst5t6mnv3a9cqq17.apps.googleusercontent.com";
 const nuevoGreg=()=>({fuente:"",gabc:"",num:"",tit:"",modo:"",partes:[],tiempos:[],es:{},estilo:LS.get("estilo",{j:true,ae:true,til:true})});
 const nuevoHimno=()=>({num:"",tit:"",partes:[],temas:"",tiempos:[],adf:false,letra:""});
-const SU={tipo:"gre",g:nuevoGreg(),hm:nuevoHimno(),ed:null,estado:"",ocupado:false};
+const nuevoPoli=()=>({num:"",tit:"",comp:"",partes:[],tiempos:[],texto:"",es:{},estilo:LS.get("estiloPol",{j:true,ae:true,til:true})});
+const SU={tipo:"gre",g:nuevoGreg(),hm:nuevoHimno(),p:nuevoPoli(),ed:null,estado:"",ocupado:false};
+const suObj=()=>SU.tipo==="gre"?SU.g:SU.tipo==="pol"?SU.p:SU.hm;
+const suVista=()=>SU.tipo==="gre"?vistaGreg():SU.tipo==="pol"?vistaPoli():vistaHimno();
 function sesionEditor(){ const s=LS.get("editor",null); return s && s.exp*1000>Date.now()+60000 ? s : null; }
 function jwtDatos(t){ try{ return JSON.parse(decodeURIComponent(escape(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))))); }catch{ return null; } }
 let _gsi=null;
@@ -1171,13 +1174,15 @@ function renderSumar(){
   }
   const tab=(v,t)=>`<button data-act="sTipo" data-v="${v}" aria-pressed="${SU.tipo===v}">${t}</button>`;
   $main.innerHTML=`<div class="s-ed"><span>${esc(SU.ed.nombre)}</span><button class="mini" data-act="sSalir">Salir</button></div>
-    <div class="segm" role="group" aria-label="Tipo de canto">${tab("gre","Gregoriano")}${tab("him","Himno")}</div>
-    <div id="sform">${SU.tipo==="gre"?formGreg():formHimno()}</div>`;
+    <div class="segm" role="group" aria-label="Tipo de canto">${tab("gre","Gregoriano")}${tab("him","Himno")}${tab("pol","Polifonía")}</div>
+    <div id="sform">${SU.tipo==="gre"?formGreg():SU.tipo==="pol"?formPoli():formHimno()}</div>`;
   $bar.innerHTML=`<div class="actions"><div class="actions-in"><button class="btn primary" data-act="sGuardar" ${SU.ocupado?"disabled":""}>${SU.ocupado?"Guardando…":"Guardar en la carpeta"}</button></div></div>`;
-  if(SU.tipo==="gre") vistaGreg(); else vistaHimno();
+  suVista();
 }
+function siguientePoli(){ return "P"+(POLI.reduce((m,c)=>Math.max(m,parseInt(String(c.id).slice(1),10)||0),0)+1); }
 function camposComunes(o){
-  return `<div class="s-fila"><label class="s-c s-num"><span>Número</span><input class="field" inputmode="numeric" data-in="s:num" value="${esc(o.num)}" placeholder="${numeroLibreLocal()}"></label>
+  const pol=SU.tipo==="pol";
+  return `<div class="s-fila"><label class="s-c s-num"><span>${pol?"Código":"Número"}</span><input class="field" ${pol?"":`inputmode="numeric"`} data-in="s:num" value="${esc(o.num)}" placeholder="${pol?siguientePoli():numeroLibreLocal()}"></label>
     <label class="s-c"><span>Título</span><input class="field" data-in="s:tit" value="${esc(o.tit)}"></label></div>
     <details class="s-det"${o.partes.length?" open":""}><summary>Partes de la Misa <small>${o.partes.length?esc(o.partes.map(k=>PARTE[k].n).join(", ")):"opcional"}</small></summary><div class="chks">${PARTES.map(p=>chk("partes",p.k,o.partes,p.n)).join("")}</div></details>
     <details class="s-det"${o.tiempos.length?" open":""}><summary>Tiempo litúrgico <small>${o.tiempos.length?esc(o.tiempos.map(k=>TIEMPO[k]).join(", ")):"opcional"}</small></summary><div class="chks">${TIEMPOS.map(([k,n])=>chk("tiempos",k,o.tiempos,n)).join("")}</div></details>`;
@@ -1215,6 +1220,56 @@ function formHimno(){
     <textarea class="field s-letra" data-in="s:letra" rows="12">${esc(H.letra)}</textarea>
     <h3 class="cat">Vista previa</h3><div class="s-prev" id="sHprev"></div><div id="sOk"></div>`;
 }
+function formPoli(){
+  const P=SU.p, e=P.estilo;
+  return `${camposComunes(P)}
+    <label class="s-c"><span>Compositor</span><input class="field" data-in="s:comp" value="${esc(P.comp)}"></label>
+    <h3 class="cat">Texto</h3>
+    <p class="hint">Una frase por línea. Deja una línea en blanco entre estrofas o secciones. Para una indicación (p. ej. «Solista», «Coro», «Todos»), escríbela sola en una línea entre corchetes: <i>[Coro]</i>.</p>
+    <textarea class="field s-letra" data-in="s:texto" rows="12" spellcheck="false">${esc(P.texto)}</textarea>
+    <h3 class="cat">Estilo de la schola</h3>
+    <div class="chks">
+      <label class="chk"><input type="checkbox" data-in="s:est" value="j" ${e.j?"checked":""}><span>j → i</span></label>
+      <label class="chk"><input type="checkbox" data-in="s:est" value="ae" ${e.ae?"checked":""}><span>ae → æ, oe → œ</span></label>
+      <label class="chk"><input type="checkbox" data-in="s:est" value="til" ${e.til?"checked":""}><span>Tildes <small>(las palabras que ya están en el Cantoral)</small></span></label>
+    </div>
+    <h3 class="cat">Traducción</h3>
+    <p class="hint">Una casilla por frase. Si la obra está en castellano, déjalas vacías.</p>
+    <div class="s-ia"><button class="btn" data-act="sIA">Copiar pedido para IA</button><button class="btn" data-act="sPegar">Pegar respuesta</button></div>
+    <div id="sFrases"></div>
+    <h3 class="cat">Vista previa</h3><div class="s-prev" id="sPprev"></div><div id="sOk"></div>`;
+}
+// El texto pasa por el mismo estilo que el gregoriano: se envuelve como si cada palabra fuera una sílaba
+function estiloTexto(t,est){
+  const D=diccionarioTildes();
+  if(est.j) t=t.replace(/j/g,"i").replace(/J/g,"I");
+  if(est.ae) t=t.replace(/áe|aé/g,"ǽ").replace(/óe|oé/g,"œ\u0301").replace(/ÁE|ÁÉ|AÉ|Áe|Aé/g,"Ǽ").replace(/ÓE|ÓÉ|OÉ|Óe|Oé/g,"Œ\u0301")
+    .replace(/ae/g,"æ").replace(/oe/g,"œ").replace(/AE|Ae/g,"Æ").replace(/OE|Oe/g,"Œ");
+  if(est.til) t=t.replace(/[A-Za-zÀ-ÿæœǽǼÆŒ\u0301]+/g,w=>{
+    if(TILDE.test(w)) return w; const L=[...w], key=L.map(nl).join(""), i=D.get(key);
+    if(i==null||!L[i]||!ACENTO[L[i]]) return w; L[i]=ACENTO[L[i]]; return L.join(""); });
+  return t;
+}
+function filasPoli(){   // [{ind,la}|null] a partir del texto
+  const P=SU.p, out=[]; let ind="";
+  estiloTexto(P.texto,P.estilo).replace(/\r/g,"").split("\n").forEach(l=>{ l=l.trim();
+    if(!l){ if(out.length && out[out.length-1]) out.push(null); return; }
+    const m=l.match(/^\[(.+)\]$/); if(m){ ind=m[1].trim(); return; }
+    out.push({ind,la:l}); });
+  while(out.length && !out[out.length-1]) out.pop();
+  return out;
+}
+function vistaPoli(frases=true){
+  const P=SU.p, F=filasPoli(), fr=F.filter(Boolean).map(f=>f.la); P._fr=fr;
+  const box=document.getElementById("sFrases");
+  if(box && frases && box.dataset.k!==fr.join("|")){ box.dataset.k=fr.join("|");
+    box.innerHTML=fr.length? fr.map((x,i)=>`<label class="s-fr"><span>${esc(x)}</span><input class="field" data-in="s:es" data-i="${i}" value="${esc(P.es[x]||"")}"></label>`).join("") : `<p class="hint">Aparecerá al escribir el texto.</p>`; }
+  const el=document.getElementById("sPprev"); if(!el) return;
+  const e=[]; let blq=null, ind="";
+  F.forEach(f=>{ if(!f){ blq=null; return; } if(f.ind && f.ind!==ind){ e.push(["l",0,f.ind]); ind=f.ind; blq=null; }
+    if(!blq){ blq=["p",0,""]; e.push(blq); } const es=(P.es[f.la]||"").trim(); blq[2]+=(blq[2]?"\n":"")+f.la+(es?"\n~ "+es:""); });
+  el.innerHTML = e.length? htmlCanto({pol:true,id:"_p",t:P.tit||"Sin título",comp:P.comp,e}) : `<p class="hint">Aparecerá al escribir el texto.</p>`;
+}
 let _sRz=null;
 function vistaGreg(){
   clearTimeout(_sRz); _sRz=setTimeout(()=>{
@@ -1237,7 +1292,12 @@ function vistaHimno(){
   el.innerHTML = H.letra.trim()? htmlCanto({n:H.num||numeroLibreLocal(),t:H.tit||"Sin título",e:parsearTexto(H.letra),temas:[]}) : `<p class="hint">Aparecerá al escribir la letra.</p>`;
 }
 function entradaSumar(el,k){
-  const o=SU.tipo==="gre"?SU.g:SU.hm;
+  const o=suObj();
+  if(SU.tipo==="pol"){
+    if(k==="est"){ o.estilo[el.value]=el.checked; LS.set("estiloPol",o.estilo); vistaPoli(); return; }
+    if(k==="es"){ const x=(o._fr||[])[+el.dataset.i]; if(x!=null){ o.es[x]=el.value; vistaPoli(false); } return; }
+    if(k!=="partes"&&k!=="tiempos"){ o[k]=el.value; if(k==="texto"||k==="tit"||k==="comp") vistaPoli(); return; }
+  }
   if(k==="partes"||k==="tiempos"){ const v=el.value; o[k]=el.checked?[...new Set(o[k].concat(v))]:o[k].filter(x=>x!==v); const sm=el.closest("details")?.querySelector("summary small"); if(sm) sm.textContent=o[k].length?o[k].map(x=>k==="partes"?PARTE[x].n:TIEMPO[x]).join(", "):"opcional"; return; }
   if(k==="est"){ SU.g.estilo[el.value]=el.checked; LS.set("estilo",SU.g.estilo); vistaGreg(); return; }
   if(k==="adf"){ SU.hm.adf=el.checked; return; }
@@ -1266,8 +1326,8 @@ async function traerGregoBase(){
   }catch(e){ toast(e.message); }
 }
 function copiarPedidoIA(){
-  const fr=SU.g._fr||[]; if(!fr.length){ toast("Primero pega o trae la partitura."); return; }
-  const t=`Traduce al castellano estas frases latinas de un canto gregoriano de la Misa. Usa el estilo de las traducciones litúrgicas (con «vosotros»), una traducción por frase, que se entienda leída debajo de cada frase. Devuelve solo las líneas numeradas, en el mismo orden:\n\n`+fr.map((x,i)=>`${i+1}. ${x}`).join("\n");
+  const o=suObj(), fr=o._fr||[]; if(!fr.length){ toast(SU.tipo==="pol"?"Primero escribe el texto.":"Primero pega o trae la partitura."); return; }
+  const t=`Traduce al castellano estas frases latinas de ${SU.tipo==="pol"?"una obra polifónica":"un canto gregoriano"} de la Misa. Usa el estilo de las traducciones litúrgicas (con «vosotros»), una traducción por frase, que se entienda leída debajo de cada frase. Devuelve solo las líneas numeradas, en el mismo orden:\n\n`+fr.map((x,i)=>`${i+1}. ${x}`).join("\n");
   navigator.clipboard.writeText(t).then(()=>toast("Pedido copiado. Pégalo en la IA y trae su respuesta con «Pegar respuesta»."),()=>{ hoja("Pedido para IA",`<textarea class="field" rows="12" readonly>${esc(t)}</textarea>`); });
 }
 function pegarRespuestaIA(){
@@ -1276,18 +1336,36 @@ function pegarRespuestaIA(){
   setTimeout(()=>document.getElementById("sResp")?.focus(),50);
 }
 function aplicarRespuestaIA(){
-  const t=document.getElementById("sResp")?.value||"", fr=SU.g._fr||[]; let n=0;
-  t.split("\n").forEach(l=>{ const m=l.match(/^\s*(\d+)\s*[.)\-:–]\s*(.+)$/); if(m && fr[+m[1]-1]!=null){ SU.g.es[fr[+m[1]-1]]=m[2].trim(); n++; } });
-  cerrarCapa(); const box=document.getElementById("sFrases"); if(box) box.dataset.k=""; vistaGreg(); toast(n?`${n} traducciones aplicadas.`:"No encontré líneas numeradas.");
+  const o=suObj(), t=document.getElementById("sResp")?.value||"", fr=o._fr||[]; let n=0;
+  t.split("\n").forEach(l=>{ const m=l.match(/^\s*(\d+)\s*[.)\-:–]\s*(.+)$/); if(m && fr[+m[1]-1]!=null){ o.es[fr[+m[1]-1]]=m[2].trim(); n++; } });
+  cerrarCapa(); const box=document.getElementById("sFrases"); if(box) box.dataset.k=""; suVista(); toast(n?`${n} traducciones aplicadas.`:"No encontré líneas numeradas.");
 }
 async function guardarSumar(){
   if(SU.ocupado) return;
-  const gre=SU.tipo==="gre", o=gre?SU.g:SU.hm;
+  const gre=SU.tipo==="gre", pol=SU.tipo==="pol", o=suObj();
+  const nombres=(ks,M)=>ks.map(k=>M(k));
+  let datos;
+  if(pol){
+    const cod=String(o.num||siguientePoli()).trim().toUpperCase();
+    if(!/^P\d+$/.test(cod)){ toast("El código debe ser P seguido de un número (p. ej. P7)."); return; }
+    if(POLI.some(c=>String(c.id).toUpperCase()===cod)){ toast(`El código ${cod} ya está en uso.`); return; }
+    if(!o.tit.trim()){ toast("Falta el título."); return; }
+    const F=filasPoli(); if(!F.length){ toast("Falta el texto."); return; }
+    datos={codigo:cod,titulo:o.tit.trim(),compositor:o.comp.trim(),partes:nombres(o.partes,k=>PARTE[k].n),tiempos:nombres(o.tiempos,k=>TIEMPO[k]),
+      filas:F.map(f=>f?{ind:f.ind,la:f.la,es:(o.es[f.la]||"").trim()}:null)};
+    SU.ocupado=true; renderSumar();
+    try{
+      await api("guardarPolifonia",datos);
+      SU.ocupado=false; renderSumar();
+      document.getElementById("sOk").innerHTML=`<div class="s-listo"><b>Guardado: ${esc(cod+" · "+datos.titulo)}</b><span>Ya está en la planilla «Polifonías». En un momento aparece en el Cantoral.</span><button class="btn" data-act="sOtro">Sumar otra</button></div>`;
+      document.getElementById("sOk").scrollIntoView({behavior:"smooth",block:"center"});
+      if(await cargarCantoral()) refrescar();
+    }catch(e){ SU.ocupado=false; renderSumar(); toast(e.message); }
+    return;
+  }
   const num=parseInt(o.num||numeroLibreLocal(),10);
   if(BASE.some(c=>+c.n===num)){ toast(`El número ${num} ya está en uso.`); return; }
   if(!o.tit.trim()){ toast("Falta el título."); return; }
-  const nombres=(ks,M)=>ks.map(k=>M(k));
-  let datos;
   if(gre){
     const fin=gregFinal(); if(!/\(/.test(fin.g)){ toast("Falta la partitura."); return; }
     const fr=frasesGabc(fin.g), hay=fr.filter(x=>(o.es[x]||"").trim());
@@ -1692,7 +1770,7 @@ document.addEventListener("click",async e=>{
     case "sPegar": pegarRespuestaIA(); break;
     case "sPegarOk": aplicarRespuestaIA(); break;
     case "sGuardar": guardarSumar(); break;
-    case "sOtro": SU.g=nuevoGreg(); SU.hm=nuevoHimno(); renderSumar(); window.scrollTo(0,0); break;
+    case "sOtro": SU.g=nuevoGreg(); SU.hm=nuevoHimno(); SU.p=nuevoPoli(); renderSumar(); window.scrollTo(0,0); break;
     case "deshacer": if(S._undo){ const x=S._undo; S._undo=null; restaurar(x); toast("Cambio deshecho."); } break;
     case "cat": S.cat=d.c; render(); break;
     case "leer": abrirLectura(d.id); break;
