@@ -541,6 +541,10 @@ ul.lista .sin-n .f{font-family:var(--sans);font-style:normal}
 .parte.ensayo::before{content:none}
 .parte.ensayo{padding-left:0}
 .prop-l>summary small{text-transform:none;letter-spacing:0;font-weight:400}
+
+.s-grupo{border-bottom:1px solid var(--line);padding:8px 0 4px}
+.s-frase{font-size:var(--f-dato);color:var(--muted);margin-bottom:2px}
+.s-grupo .s-fr{border-bottom:0;padding:3px 0}
 </style>
 </head>
 <body>
@@ -1179,16 +1183,27 @@ function aplicarEstilo(g,est){
   return {g,faltan:[...new Set(faltan)]};
 }
 /* ---- Frases del latín, para la traducción ---- */
+// Palabras que no deben quedar al final de un segmento: van con la siguiente
+const LIGADAS=new Set("et in ad cum de ex e a ab abs ut per pro sub super non qui quæ quod quia sicut nec neque sed tu te me se nos vos o super inter ante post propter".split(" "));
+function segmentar(frase){
+  const w=frase.split(/\s+/).filter(Boolean); if(w.length<=3) return [w.join(" ")];
+  const n=Math.ceil(w.length/3), base=Math.floor(w.length/n), extra=w.length%n, out=[]; let i=0;
+  for(let k=0;k<n;k++){ const t=base+(k<extra?1:0); out.push(w.slice(i,i+t)); i+=t; }
+  for(let k=0;k<out.length-1;k++){ const ult=out[k][out[k].length-1]; if(out[k].length>1 && LIGADAS.has(normB(ult).replace(/[^a-zæœ]/g,""))) out[k+1].unshift(out[k].pop()); }
+  return out.filter(x=>x.length).map(x=>x.join(" "));
+}
 function frasesGabc(g){
   const out=[]; let cur=[];
   const i0=g.indexOf("%%"); let cu=(i0>=0?g.slice(i0+2):g).replace(/<sp>V\/<\/sp>\.?/g," | ").replace(/<sp>R\/<\/sp>\.?/g," | ");
   cu=cu.replace(/\([^)]*\)/g,"").replace(/<[^>]*>/g,"").replace(/\[[^\]]*\]/g,"").replace(/[{}]/g,"");
   cu.split(/\s+/).forEach(w=>{ if(!w || /^(Ps|Cant|T|P)\.$/.test(w)) return;
     if(w==="|"||w==="*"||w==="†"){ if(cur.length){ out.push(cur.join(" ")); cur=[]; } return; }
-    cur.push(w.replace(/[*†]/g,"")); if(/[.,;:!?]$/.test(w)){ out.push(cur.join(" ")); cur=[]; } });
+    cur.push(w.replace(/[*†]/g,"").replace(/^([A-ZÆŒÁÉÍÓÚÝǼ])([A-ZÆŒÁÉÍÓÚÝǼ]+)/,(m,x,y)=>x+y.toLowerCase())); if(/[.,;:!?]$/.test(w)){ out.push(cur.join(" ")); cur=[]; } });
   if(cur.length) out.push(cur.join(" "));
   return out.map(x=>x.trim()).filter(x=>x && !/^e u o u a e\.?$/i.test(x) && /[A-Za-zÀ-ÿæœ]/.test(x));
 }
+// Frases completas y sus segmentos: [{frase, segs:[…]}]
+function gruposGabc(g){ return frasesGabc(g).map(f=>({frase:f,segs:segmentar(f)})); }
 function gregFinal(){ const G=SU.g; const r=aplicarEstilo(G.gabc,G.estilo); return r; }
 function numeroLibreLocal(){ const usados=new Set(BASE.map(c=>+c.n).filter(Boolean)); let n=1; usados.forEach(x=>{ if(x>=n) n=x+1; }); return n; }
 
@@ -1239,7 +1254,7 @@ function formGreg(){
     <h3 class="cat">4 · Vista previa</h3>
     <div class="s-prev"><div class="partitura" data-g="_nuevo"><p class="cargando">Pega o trae una partitura.</p></div></div>
     <h3 class="cat">5 · Traducción</h3>
-    <p class="hint">Una casilla por frase. Lo que escribas aparece debajo de la partitura.</p>
+    <p class="hint">Cada frase está dividida en segmentos cortos, para que la traducción quepa debajo de su latín. Lo que escribas aparece debajo de la partitura.</p>
     <div class="s-ia"><button class="btn" data-act="sIA">Copiar pedido para IA</button><button class="btn" data-act="sPegar">Pegar respuesta</button></div>
     <div id="sFrases"></div>
     <div id="sOk"></div>`;
@@ -1309,10 +1324,10 @@ function vistaGreg(){
   clearTimeout(_sRz); _sRz=setTimeout(()=>{
     const G=SU.g; const fin=gregFinal();
     const f=document.getElementById("sFaltan"); if(f) f.innerHTML=fin.faltan.length&&G.estilo.til?`<p class="hint">Sin tilde (no las encontré en el Cantoral; si hace falta, agrégala en el código): <i>${fin.faltan.map(esc).join(", ")}</i></p>`:"";
-    const fr=frasesGabc(fin.g); G._fr=fr;
+    const gr=gruposGabc(fin.g), fr=gr.flatMap(x=>x.segs); G._fr=fr; G._gr=gr;
     const box=document.getElementById("sFrases");
-    if(box && box.dataset.k!==fr.join("|")){ box.dataset.k=fr.join("|");
-      box.innerHTML=fr.length? fr.map((x,i)=>`<label class="s-fr"><span>${esc(x)}</span><input class="field" data-in="s:es" data-i="${i}" value="${esc(G.es[x]||"")}"></label>`).join("") : `<p class="hint">Aparecerá cuando haya una partitura.</p>`; }
+    if(box && box.dataset.k!==fr.join("|")){ box.dataset.k=fr.join("|"); let i=0;
+      box.innerHTML=fr.length? gr.map(x=>`<div class="s-grupo"><div class="s-frase">${esc(x.frase)}</div>${x.segs.map(s=>`<label class="s-fr"><span>${esc(s)}</span><input class="field" data-in="s:es" data-i="${i++}" value="${esc(G.es[s]||"")}"></label>`).join("")}</div>`).join("") : `<p class="hint">Aparecerá cuando haya una partitura.</p>`; }
     const prev=document.querySelector('.s-prev .partitura'); if(!prev) return;
     if(!/\(/.test(fin.g)){ prev.innerHTML=`<p class="cargando">Pega o trae una partitura.</p>`; return; }
     GREG.gabc._nuevo=normalizarGabc(fin.g,G.modo);
@@ -1339,7 +1354,7 @@ function entradaSumar(el,k){
   o[k]=el.value;
   if(SU.tipo==="gre" && k==="gabc" && /%%/.test(el.value)){   // GABC pegado con encabezado: título y modo
     const c=leerCabeceraGabc(el.value), f=document.getElementById("sform");
-    if(!SU.g.tit && c.nombre){ SU.g.tit=c.nombre; const i=f.querySelector('[data-in="s:tit"]'); if(i) i.value=c.nombre; }
+    if(!SU.g.tit && c.nombre){ SU.g.tit=normTitulo(c.nombre); const i=f.querySelector('[data-in="s:tit"]'); if(i) i.value=SU.g.tit; }
     if(!SU.g.modo && c.modo){ SU.g.modo=c.modo; const i=f.querySelector('[data-in="s:modo"]'); if(i) i.value=c.modo; }
   }
   if(SU.tipo==="gre" && (k==="gabc"||k==="modo")) vistaGreg();
@@ -1355,13 +1370,42 @@ async function traerGregoBase(){
   toast("Trayendo la partitura…");
   try{
     const x=await api("gregobase",{id}); const c=leerCabeceraGabc(x.gabc);
-    G.gabc=c.cuerpo.trim(); if(!G.tit) G.tit=c.nombre.replace(/\s*\((Intr|Grad|Off|Comm|All|Tract|Seq|Ant|Hymn)\.?\)\s*$/i,""); if(!G.modo) G.modo=c.modo;
+    G.gabc=c.cuerpo.trim(); if(!G.tit) G.tit=normTitulo(c.nombre); if(!G.modo) G.modo=c.modo;
     renderSumar(); toast("Partitura traída de GregoBase.");
   }catch(e){ toast(e.message); }
 }
+// Formas de cada palabra latina tal como están en las partituras (i, æ/œ, tildes en palabras de 3+ sílabas)
+let _formas=null;
+const clavePal=w=>[...w].map(nl).join("").replace(/æ/g,"ae").replace(/œ/g,"oe");
+function formasLatinas(){
+  if(_formas) return _formas; const cnt=new Map();
+  Object.entries(GREG.gabc).forEach(([k,g])=>{ if(k==="_nuevo") return; palabrasGabc(String(g)).forEach(w=>{
+    let f=w.l.map(x=>x.c).join("").toLowerCase().replace(/j/g,"i"); if(f.length<2) return;
+    if(w.sil<3) f=f.normalize("NFD").replace(/[\u0300\u0301]/g,"").normalize("NFC");
+    const key=clavePal(f); let m=cnt.get(key); if(!m) cnt.set(key,m=new Map()); m.set(f,(m.get(f)||0)+1); }); });
+  _formas=new Map(); cnt.forEach((m,key)=>{ const f=[...m.entries()].sort((a,b)=>(TILDE.test(b[0])-TILDE.test(a[0]))||(b[1]-a[1]))[0][0]; _formas.set(key,f); });
+  return _formas;
+}
+const SAGRADOS=new Set("deus dei deo deum domine dominus domini domino dominum christus christe christi christo christum iesus iesu maria mariae mariam spiritus spiritu spiritum pater patris patri patrem filius fili filio filium genitrix agnus trinitas trinitatis paraclitus paraclite emmanuel adonai".split(" "));
+function normTitulo(t){
+  const F=formasLatinas();
+  t=String(t||"").replace(/\s*\((?:Intr|Introitus|Grad|Graduale|Off|Offertorium|Comm?|Communio|All|Alleluia|Tract|Tractus|Seq|Sequentia|Ant|Antiphona|Hymn|Hymnus|Resp|Responsorium)\.?\)/gi,"")
+    .replace(/\.\.\./g,"…").replace(/\s+/g," ").trim();
+  t=t.replace(/[A-Za-zÀ-ÿæœǽÆŒǼ\u0301]+/g,w=>{
+    const key=clavePal(w.toLowerCase()); let f=F.get(key);
+    if(!f){ f=w.toLowerCase().replace(/j/g,"i").replace(/áe|aé/g,"ǽ").replace(/óe|oé/g,"œ\u0301").replace(/ae/g,"æ").replace(/oe/g,"œ"); }
+    if(/^[A-ZÁÉÍÓÚÝÆŒǼ]/.test(w) || SAGRADOS.has(key.replace(/[^a-z]/g,""))) f=f.charAt(0).toUpperCase()+f.slice(1);
+    return f; });
+  return t.charAt(0).toUpperCase()+t.slice(1);
+}
 function copiarPedidoIA(){
   const o=suObj(), fr=o._fr||[]; if(!fr.length){ toast(SU.tipo==="pol"?"Primero escribe el texto.":"Primero pega o trae la partitura."); return; }
-  const t=`Traduce al castellano estas frases latinas de ${SU.tipo==="pol"?"una obra polifónica":"un canto gregoriano"} de la Misa. Usa el estilo de las traducciones litúrgicas (con «vosotros»), una traducción por frase, que se entienda leída debajo de cada frase. Devuelve solo las líneas numeradas, en el mismo orden:\n\n`+fr.map((x,i)=>`${i+1}. ${x}`).join("\n");
+  const reglas=SU.tipo==="pol"
+    ? `Traduce al castellano este texto latino de una obra polifónica para la Misa. Cada línea numerada es una frase del texto; la traducción se muestra debajo de su línea.\n\nReglas:\n- Una traducción por línea, con el mismo número y en el mismo orden.\n- Ten en cuenta el texto completo para que el sentido sea correcto.\n- Estilo de las traducciones litúrgicas en castellano, con «vosotros». Las oraciones conocidas, en su forma habitual («Dios te salve, María…»).\n- Sin explicaciones ni notas. Devuelve solo las líneas numeradas.\n\n`+fr.map((x,i)=>`${i+1}. ${x}`).join("\n")
+    : (()=>{ let n=0; const gr=o._gr||[{frase:fr.join(" "),segs:fr}];
+      return `Traduce al castellano este canto gregoriano latino para mostrarlo como traducción interlineal: cada traducción se imprime debajo de su segmento latino, en una sola línea, así que tiene que caber en ese espacio.\n\nReglas:\n- Traduce segmento por segmento: una línea por segmento, con el mismo número y en el mismo orden. No juntes ni dividas segmentos.\n- Lee primero la frase completa para entender el sentido, pero en cada segmento pon solo la traducción de esas palabras latinas, tan literal como lo permita un castellano natural.\n- Si el castellano pide otro orden, reparte las palabras para que cada segmento quede lo más cerca posible de su latín; no adelantes ni atrases ideas a otro segmento salvo que sea imprescindible.\n- Traducciones breves: no más largas que el segmento latino. Nada de explicaciones, notas ni paréntesis.\n- Estilo de las traducciones litúrgicas en castellano, con «vosotros». Las oraciones y textos conocidos, en su forma habitual («Gloria al Padre…»).\n- Si un segmento no necesita traducción propia (por ejemplo, una palabra que ya quedó traducida en el segmento anterior), deja la línea con el número y nada más.\n\nDevuelve solo las líneas numeradas.\n\n`
+        + gr.map(x=>`Frase: «${x.frase}»\n`+x.segs.map(s=>`${++n}. ${s}`).join("\n")).join("\n\n"); })();
+  const t=reglas;
   navigator.clipboard.writeText(t).then(()=>toast("Pedido copiado. Pégalo en la IA y trae su respuesta con «Pegar respuesta»."),()=>{ hoja("Pedido para IA",`<textarea class="field" rows="12" readonly>${esc(t)}</textarea>`); });
 }
 function pegarRespuestaIA(){
@@ -1371,7 +1415,7 @@ function pegarRespuestaIA(){
 }
 function aplicarRespuestaIA(){
   const o=suObj(), t=document.getElementById("sResp")?.value||"", fr=o._fr||[]; let n=0;
-  t.split("\n").forEach(l=>{ const m=l.match(/^\s*(\d+)\s*[.)\-:–]\s*(.+)$/); if(m && fr[+m[1]-1]!=null){ o.es[fr[+m[1]-1]]=m[2].trim(); n++; } });
+  t.split("\n").forEach(l=>{ const m=l.match(/^\s*(\d+)\s*[.)\-:–]\s*(.*)$/); if(m && fr[+m[1]-1]!=null){ o.es[fr[+m[1]-1]]=m[2].trim(); if(m[2].trim()) n++; } });
   cerrarCapa(); const box=document.getElementById("sFrases"); if(box) box.dataset.k=""; suVista(); toast(n?`${n} traducciones aplicadas.`:"No encontré líneas numeradas.");
 }
 async function guardarSumar(){
@@ -1402,7 +1446,7 @@ async function guardarSumar(){
   if(!o.tit.trim()){ toast("Falta el título."); return; }
   if(gre){
     const fin=gregFinal(); if(!/\(/.test(fin.g)){ toast("Falta la partitura."); return; }
-    const fr=frasesGabc(fin.g), hay=fr.filter(x=>(o.es[x]||"").trim());
+    const fr=gruposGabc(fin.g).flatMap(x=>x.segs), hay=fr.filter(x=>(o.es[x]||"").trim());
     datos={numero:num,titulo:o.tit.trim(),modo:o.modo,partes:nombres(o.partes,k=>PARTE[k].n),tiempos:nombres(o.tiempos,k=>TIEMPO[k]),
       gabc:(o.modo?`mode:${o.modo};\n`:"")+"%%\n"+leerCabeceraGabc(fin.g).cuerpo.trim(),
       latin:hay, castellano:hay.map(x=>o.es[x].trim())};
