@@ -672,7 +672,7 @@ let S = {
 };
 // Las partes fijas (Entrada, Alleluia, Credo, Ofertorio, Comunión, Postcomunión, Salida) siempre están en el repertorio que se edita,
 // también en los guardados antes de que se agregara alguna de ellas
-const esEnsayo=r=>!!(r&&Array.isArray(r.p)&&r.p.some(x=>x.k==="ensayo"));
+function esEnsayo(r){ return !!(r&&Array.isArray(r.p)&&r.p.some(x=>x.k==="ensayo")); }
 function nuevoEnsayo(){ return {id:"r"+Date.now().toString(36),t:"",d:hoyISO(),p:[{k:"ensayo",s:[],nota:""}]}; }
 // Rótulo de cada pieza: la parte de la Misa, o en un ensayo su posición («3 de 8»)
 function rotParte(it,i,n){ return it.k==="ensayo" ? `${i+1} de ${n}` : (PARTE[it.k]?.n||it.k); }
