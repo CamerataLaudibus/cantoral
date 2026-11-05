@@ -533,6 +533,14 @@ ul.lista .sin-n .f{font-family:var(--sans);font-style:normal}
 .s-listo .btn{align-self:flex-start}
 .letania .orac{padding-left:0;text-indent:0;margin:.4em 0}
 .letania p .gl{text-indent:0}
+
+/* ===== Ensayo ===== */
+.rep-tipo{font-family:var(--sans);text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:var(--f-dato);color:var(--rubric);margin-bottom:6px}
+.parte.ensayo{border-bottom:0}
+.prop-l>summary small{margin-left:4px}
+.parte.ensayo::before{content:none}
+.parte.ensayo{padding-left:0}
+.prop-l>summary small{text-transform:none;letter-spacing:0;font-weight:400}
 </style>
 </head>
 <body>
@@ -587,7 +595,8 @@ const PARTES = [
   {k:"absolucion", n:"Absolución"},
   {k:"mariano", n:"Antífona mariana"},
   {k:"salida", n:"Salida"},
-  {k:"postludio", n:"Postludio"}
+  {k:"postludio", n:"Postludio"},
+  {k:"ensayo", n:"Ensayo"}           // repertorio de ensayo: una sola lista, sin partes de la Misa
 ];
 const PARTE = Object.fromEntries(PARTES.map((p,i)=>[p.k,{...p,i}]));
 const CATS = {
@@ -663,8 +672,13 @@ let S = {
 };
 // Las partes fijas (Entrada, Alleluia, Credo, Ofertorio, Comunión, Postcomunión, Salida) siempre están en el repertorio que se edita,
 // también en los guardados antes de que se agregara alguna de ellas
+const esEnsayo=r=>!!(r&&Array.isArray(r.p)&&r.p.some(x=>x.k==="ensayo"));
+function nuevoEnsayo(){ return {id:"r"+Date.now().toString(36),t:"",d:hoyISO(),p:[{k:"ensayo",s:[],nota:""}]}; }
+// Rótulo de cada pieza: la parte de la Misa, o en un ensayo su posición («3 de 8»)
+function rotParte(it,i,n){ return it.k==="ensayo" ? `${i+1} de ${n}` : (PARTE[it.k]?.n||it.k); }
 function completarPartes(r){
   if(!r||!Array.isArray(r.p)) return r;
+  if(esEnsayo(r)) return r;
   DEFAULT_PARTS.forEach(k=>{ if(!r.p.some(x=>x.k===k)) r.p.push({k,s:[],nota:""}); });
   r.p.sort((a,b)=>(PARTE[a.k]?.i??99)-(PARTE[b.k]?.i??99));
   return r;
@@ -715,7 +729,7 @@ function catNombre(k){return CATS[k]?.n || k || "Sin categoría"}
 function rotulo(c){return c.pol? c.t : c.greg? c.t+(c.sub?" · "+c.sub:"") : c.n+". "+c.t}
 function primerVerso(c){if(c.pol)return c.comp||"Polifonía";if(c.greg&&c.propio)return "Gregoriano propio";if(c.greg)return [c.sub,c.f].filter(Boolean).join(" · ");const e=(c.e||[]).find(x=>x[0]!=="l");return e?e[2].split("\n")[0].replace(/^\s*~\s*/,""):""}
 const normB=s=>norm(s).replace(/æ/g,"ae").replace(/œ/g,"oe").replace(/j/g,"i");
-function busca(c,q){if(!q) return true;const h=normB(c.t+" "+c.n+" "+(c.sub||"")+" "+(c.f||"")+" "+(c.e||[]).map(e=>e[2]).join(" "));return normB(q).split(/\s+/).every(w=>h.includes(w))}
+function busca(c,q){if(!q) return true;const h=normB(c.t+" "+c.n+" "+(c.sub||"")+" "+(c.f||"")+" "+(c.e||[]).map(e=>e[2]).join(" "));return normB(q).split(/\s+/).every(w=>/^[ivxl]+$/.test(w)?new RegExp("(^|[^a-z])"+w+"([^a-z]|$)").test(h):h.includes(w))}
 
 /* Texto pegado → estrofas (misma regla que la importación de los Word) */
 function parsearTexto(txt){
@@ -746,7 +760,7 @@ function textoDe(c){return (c.e||[]).map(e=>e[0]==="v"?`${e[1]}. ${e[2]}`:e[2]).
 function b64u(str){const bytes=new TextEncoder().encode(str);let bin="";bytes.forEach(b=>bin+=String.fromCharCode(b));return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
 function unb64u(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";const bin=atob(s);return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)))}
 /* Enlace compacto: #m=Título~AAMMDD~Parte+ids~…  (los enlaces viejos #r= siguen funcionando) */
-const PCOD={credo:"F",entrada:"E",preludio:"B",postconsagracion:"N",kyrie:"K",gloria:"G",salmo:"S",aclamacion:"A",secuencia:"Q",ritos:"R",rito:"X",final:"Z",ofertorio:"O",santo:"T",cordero:"D",comunion:"C",accion:"H",mariano:"M",salida:"L",ite:"I",postludio:"P",absolucion:"U"};
+const PCOD={credo:"F",entrada:"E",preludio:"B",postconsagracion:"N",kyrie:"K",gloria:"G",salmo:"S",aclamacion:"A",secuencia:"Q",ritos:"R",rito:"X",final:"Z",ofertorio:"O",santo:"T",cordero:"D",comunion:"C",accion:"H",mariano:"M",salida:"L",ite:"I",postludio:"P",absolucion:"U",ensayo:"W"};
 const PDEC=Object.fromEntries(Object.entries(PCOD).map(([k,v])=>[v,k]));
 function txtEnc(x){ return encodeURIComponent(String(x||"")).replace(/[_~!'()*]/g,c=>"%"+c.charCodeAt(0).toString(16).toUpperCase()).replace(/%20/g,"_"); }
 function txtDec(x){ try{ return decodeURIComponent(String(x||"").replace(/_/g," ")); }catch{ return String(x||"").replace(/_/g," "); } }
@@ -822,10 +836,10 @@ function renderLectura(rep, porEnlace){
   const items = secuencia(rep);
   $main.innerHTML = `
   <section class="hoy">
-    <h2>${esc(rep.t || "Repertorio de la Misa")}</h2>
+    <h2>${esc(rep.t || (esEnsayo(rep)?"Ensayo":"Repertorio de la Misa"))}</h2>
     ${items.length? `<ol class="orden">${items.map((it,i)=>`
       <li data-act="cantar" data-i="${i}" tabindex="0">
-        <span class="p">${esc(PARTE[it.k]?.n||it.k)}</span>
+        <span class="p">${esc(it.k==="ensayo"?String(i+1):(PARTE[it.k]?.n||it.k))}</span>
         <span class="t">${it.c?esc(rotulo(it.c)):"<em>Canto no encontrado</em>"}${it.nota?`<span class="nt">${esc(it.nota)}</span>`:""}</span>
       </li>`).join("")}</ol>` : `<p class="empty">Este repertorio todavía no tiene cantos.</p>`}
   </section>`;
@@ -838,22 +852,24 @@ function renderLectura(rep, porEnlace){
 
 function renderEditor(){
   const r=S.rep; r.d=hoyISO();   // sin campo de fecha: el repertorio toma la fecha del día en que se arma
-  const libres = PARTES.filter(p=>!r.p.some(x=>x.k===p.k));
+  const ens=esEnsayo(r);
+  const libres = ens ? [] : PARTES.filter(p=>p.k!=="ensayo" && !r.p.some(x=>x.k===p.k));
   $main.innerHTML = `
   <div class="rep-head">
-    ${r.t||S._nombre?`<input class="rep-title" data-in="t" placeholder="Nombre de la celebración" value="${esc(r.t)}" aria-label="Nombre de la celebración">`
+    ${ens?`<div class="rep-tipo">Ensayo</div>`:""}
+    ${r.t||S._nombre?`<input class="rep-title" data-in="t" placeholder="${ens?"Nombre del ensayo":"Nombre de la celebración"}" value="${esc(r.t)}" aria-label="Nombre">`
       :`<button class="rep-nombrar" data-act="nombrar">+ Ponerle un nombre</button>`}
-    <div class="rep-acc"><button class="btn" data-act="elegirMisa">Cargar Ordinario</button><button class="btn" data-act="elegirPropio">Cargar Propio</button></div>
+    ${ens?"":`<div class="rep-acc"><button class="btn" data-act="elegirMisa">Cargar Ordinario</button><button class="btn" data-act="elegirPropio">Cargar Propio</button></div>`}
   </div>
   <ol class="partes">
     ${r.p.map((p,pi)=>`
-    <li class="parte">
-      <div class="parte-h">
+    <li class="parte${ens?" ensayo":""}">
+      ${ens?"":`<div class="parte-h">
         <span class="parte-n">${esc(PARTE[p.k]?.n||p.k)}</span>
         <span class="parte-tools">
           <button class="mini" data-act="quitarParte" data-pi="${pi}" title="Quitar esta parte">Quitar</button>
         </span>
-      </div>
+      </div>`}
       ${p.s.length?`<div class="chips">${p.s.map((id,si)=>{const c=canto(id);return `
         <div class="chip">
           <span class="num">${c?esc(c.n):"?"}</span>
@@ -862,8 +878,8 @@ function renderEditor(){
           <button class="mini" data-act="leer" data-id="${esc(id)}">Ver</button>
           <button class="mini" data-act="quitarCanto" data-pi="${pi}" data-si="${si}" aria-label="Quitar canto">✕</button>
         </div>`}).join("")}</div>`:""}
-      <button class="add-canto" data-act="elegir" data-pi="${pi}">${p.s.length?"+ Otro canto para esta parte":"+ Elegir canto"}</button>
-      ${p.nota||S._notaPi===pi?`<input class="nota" data-in="nota" data-pi="${pi}" placeholder="Indicación (p. ej. estrofas 1, 3 y 5)" value="${esc(p.nota)}">`:`<button class="nota-btn" data-act="nota" data-pi="${pi}">+ Indicación</button>`}
+      <button class="add-canto" data-act="elegir" data-pi="${pi}">${ens?"+ Agregar canto":p.s.length?"+ Otro canto para esta parte":"+ Elegir canto"}</button>
+      ${ens?"":p.nota||S._notaPi===pi?`<input class="nota" data-in="nota" data-pi="${pi}" placeholder="Indicación (p. ej. estrofas 1, 3 y 5)" value="${esc(p.nota)}">`:`<button class="nota-btn" data-act="nota" data-pi="${pi}">+ Indicación</button>`}
     </li>`).join("")}
   </ol>
   ${libres.length?`<div style="margin-top:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -911,7 +927,7 @@ function todasLasPiezas(){
 }
 function proximoDomingo(){ const d=new Date(); d.setHours(12); d.setDate(d.getDate()+((7-d.getDay())%7)); return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); }
 const COLOR_TIEMPO={adviento:"#6b4a8a",cuaresma:"#6b4a8a",navidad:"#b8962e",pascua:"#b8962e","semana-santa":"#981914",pentecostes:"#981914"};
-function filaRep(r){ const n=piezasRep(r); return `<li><button data-act="abrirRep" data-id="${esc(r.id)}"><span class="n"></span><span class="tt-wrap"><span class="t">${esc(r.t||"Sin nombre")}</span><span class="f">${n} ${n===1?"pieza":"piezas"} · ${esc(fechaLarga(new Date(r.mod||Date.now()).toISOString().slice(0,10)))}</span></span><span class="tag"></span></button></li>`; }
+function filaRep(r){ const n=piezasRep(r); return `<li><button data-act="abrirRep" data-id="${esc(r.id)}"><span class="n"></span><span class="tt-wrap"><span class="t">${esc(r.t||"Sin nombre")}</span><span class="f">${esEnsayo(r)?"Ensayo · ":""}${n} ${n===1?"pieza":"piezas"} · ${esc(fechaLarga(new Date(r.mod||Date.now()).toISOString().slice(0,10)))}</span></span><span class="tag"></span></button></li>`; }
 function renderInicio(){
   const r=S.rep, n=piezasRep(r);
   const q=S.qh.trim();
@@ -972,6 +988,16 @@ function renderRepertorios(){
 }
 const SECC_GRE=[["ord","Ordinarios","Kyriale y Credos"],["tie","Propios del Tiempo",""],["san","Propios de los Santos",""],["com","Comunes","Alleluias y Tractos del Común"],["vot","Votivas",""],["var","Cantos varios","Himnos, antífonas y propios de la schola"]];
 function lista(arr){ return arr.length?`<ul class="lista">${arr.map(c=>filaCanto(c,"leer")).join("")}</ul>`:`<p class="empty">Todavía no hay piezas aquí.</p>`; }
+// Kyriale agrupado por Misa (I, II…), con los Credos y los ad libitum aparte
+function kyrialePorMisa(fila,q){
+  const {idx}=gregIndice(), PZ=["kyrie","gloria","credo","sanctus","agnus","ite"];
+  const det=(tit,sub,cs,abierto)=>{ cs=cs.filter(c=>c&&!OCULTOS.has(c.id)&&(!q||busca(c,q)||busca({t:tit+" "+sub,n:"",e:[]},q))); if(!cs.length) return "";
+    return `<details class="prop-l"${q||abierto?" open":""}><summary>${esc(tit)}${sub?` <small>${esc(sub)}</small>`:""}</summary><ul class="lista pick">${cs.map(fila).join("")}</ul></details>`; };
+  const misas=GREG.misas.map(m=>det(m.r?`Misa ${m.r}`:m.n, m.r?[m.n,m.s].filter(Boolean).join(" · "):m.s||"", PZ.flatMap(p=>(m[p]||[]).map(([g])=>idx[g])))).join("");
+  const credos=det("Credos","",gregLista("credo"));
+  const adlib=det("Ad libitum","",["kyrie","gloria","sanctus","agnus"].flatMap(p=>((GREG.adlib||{})[p]||[]).map(([g])=>idx[g])));
+  return misas+credos+adlib;
+}
 function misasDe(l){
   const xs=PROPIOS.filter(m=>m.l===l); if(!xs.length) return `<p class="empty">Todavía no hay Misas aquí.</p>`;
   const grupos=[...new Set(xs.map(m=>m.g))];
@@ -992,7 +1018,7 @@ function renderSeccion(){
   } else if(s.startsWith("gre-")){
     const k=s.slice(4), def=SECC_GRE.find(x=>x[0]===k)||SECC_GRE[0];
     html=`<h2 class="pag-t">${esc(def[1])}</h2>${def[2]?`<p class="pag-sub">${esc(def[2])}</p>`:""}`;
-    if(k==="ord") html+=["kyrie","gloria","credo","sanctus","agnus","ite"].map(p=>`<h3 class="cat">${esc(GNOMBRE[p])}</h3>`+lista(gregLista(p))).join("");
+    if(k==="ord") html+=kyrialePorMisa(c=>filaCanto(c,"leer"),"");
     else if(k==="tie") html+=misasDe("Propio del Tiempo");
     else if(k==="san") html+=misasDe("Propio de los Santos");
     else if(k==="vot") html+=misasDe("Votivas y otras");
@@ -1505,7 +1531,7 @@ function hoja(titulo,cuerpo,pie=""){
 function abrirSelector(pi){
   S._pi=pi; S._pq="";
   S._pcol = S._pcol && S._pcol!=="cantos" ? S._pcol : "sug";
-  hoja(`Elegir canto · ${PARTE[S.rep.p[pi].k]?.n}`,`
+  hoja(S.rep.p[pi].k==="ensayo"?"Agregar canto al ensayo":`Elegir canto · ${PARTE[S.rep.p[pi].k]?.n}`,`
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input class="field" type="search" id="pq" placeholder="${S.rep.p[pi].k==="aclamacion"?"Buscar Alleluia, Tracto, Misa o santo":S.rep.p[pi].k==="credo"?"Buscar Credo":S.rep.p[pi].k==="ite"?"Buscar Ite missa est":"Buscar en todo el cantoral"}" aria-label="Buscar"></div>
     <div id="picklist"></div>`);
@@ -1517,6 +1543,7 @@ function pintarSelector(){
   const parte=S.rep.p[S._pi]; if(!parte) return;
   const q=S._pq, ya=new Set(parte.s);
   const fila=c=>filaCanto(c,"agregar").replace("<li>",`<li class="${ya.has(c.id)?"in":""}">`);
+  if(parte.k==="ensayo"){ pintarSelectorEnsayo(q,fila); return; }
   if(parte.k==="aclamacion"){ pintarSelectorAlleluia(q,fila); return; }
   if(parte.k==="ite"){ const it=gregLista("ite").filter(c=>busca(c,q));
     document.getElementById("picklist").innerHTML = it.length? `<div class="grp">Kyriale · Ite missa est</div><ul class="lista pick">${it.map(fila).join("")}</ul>` : `<p class="empty">Ningún Ite missa est coincide con la búsqueda.</p>`; return; }
@@ -1575,6 +1602,29 @@ function pintarSelector(){
     </div>`;
 }
 
+// Ensayo: todo el Cantoral, en tres pestañas
+function pintarSelectorEnsayo(q,fila){
+  if(!["him","gre","pol"].includes(S._pens)) S._pens="gre";
+  const ul=xs=>`<ul class="lista pick">${xs.map(fila).join("")}</ul>`;
+  const himnos=cantos().filter(c=>!c.greg&&!c.oculto&&busca(c,q));
+  const porT={}; himnos.forEach(c=>(temasDe(c).length?temasDe(c):["sin-categoria"]).forEach(k=>(porT[k]=porT[k]||[]).push(c)));
+  const colHim=Object.keys(porT).sort((a,b)=>catNombre(a).localeCompare(catNombre(b),"es")).map(k=>`<div class="grp">${esc(catNombre(k))}</div>`+ul(porT[k])).join("") || `<p class="empty">Ningún himno coincide con la búsqueda.</p>`;
+  const det=(tit,cs,abierto)=>{ cs=cs.filter(c=>c&&(!q||busca(c,q))); return cs.length?`<details class="prop-l"${q||abierto?" open":""}><summary>${esc(tit)} <small>${cs.length}</small></summary>${ul(cs)}</details>`:""; };
+  const {idx}=gregIndice();
+  const propios=["Propio del Tiempo","Propio de los Santos","Votivas y otras"].map(l=>{
+    const ms=PROPIOS.filter(m=>m.l===l).map(m=>{ const cs=m.pz.map(([cod,g])=>idx[g]).filter(c=>c&&(!q||busca(c,q)||norm(m.t).includes(norm(q)))); return cs.length?`<details class="prop-l"${q?" open":""}><summary>${esc(m.t)}</summary>${ul(cs)}</details>`:""; }).join("");
+    return ms?`<div class="grp">${esc(l)}</div>${ms}`:""; }).join("");
+  const colGre=(()=>{ const k=kyrialePorMisa(fila,q); return (k?`<div class="grp">Kyriale</div>${k}`:"")
+    + (propios?propios:"")
+    + det("Alleluias y Tractos",gregIndice().alleluias.map(a=>a.c))
+    + det("Himnos y antífonas",gregLista("libres"))
+    + det("Propios de la schola",gregPropios()); })() || `<p class="empty">Ningún gregoriano coincide con la búsqueda.</p>`;
+  const pols=POLI.filter(c=>!c.oculto&&busca(c,q)).sort((a,b)=>a.t.localeCompare(b.t,"es"));
+  const colPol=pols.length?ul(pols):`<p class="empty">${POLI.length?"Ninguna polifonía coincide con la búsqueda.":"Todavía no hay textos de polifonías."}</p>`;
+  const tab=(v,t,n)=>`<button role="tab" data-act="pens" data-v="${v}" aria-selected="${S._pens===v}">${t}${n!=null?` <small>${n}</small>`:""}</button>`;
+  document.getElementById("picklist").innerHTML=`<div class="pcols-tabs" role="tablist">${tab("him","Himnos",himnos.length)}${tab("gre","Gregoriano")}${tab("pol","Polifonías",pols.length)}</div>
+    <section class="pcol">${({him:colHim,gre:colGre,pol:colPol})[S._pens]}</section>`;
+}
 // Parte Alleluia / Tracto: solo Alleluias y Tractos de todas las Misas, agrupados como en el Graduale
 function pintarSelectorAlleluia(q,fila){
   const todos=gregIndice().alleluias.filter(a=>!q||busca(a.c,q)||norm(a.todas).includes(norm(q)));
@@ -1705,11 +1755,11 @@ function pintarCoro(scrollTop,entra){
       <button class="iconbtn" data-act="indice" aria-label="Más opciones"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
     </div>
     <button class="iconbtn coro-x" data-act="cerrar" aria-label="Salir">✕</button>
-    <div class="coro-b" id="coroB"><div class="coro-pag${entra?" entra-"+entra:""}">${htmlCanto(it.c,it.nota,PARTE[it.k]?.n||"")}
-      ${next?`<button class="coro-sig" data-act="mover" data-d="1"><small>Siguiente</small>${esc(PARTE[next.k]?.n||"")} · ${esc(next.c?.t||"")} →</button>`:`<p class="coro-fin">Fin del repertorio</p>`}</div></div>
-    ${idx?`<div class="pane"><div class="sheet-h"><h3>Orden de la Misa</h3><button class="iconbtn" data-act="indice" aria-label="Cerrar">✕</button></div>
+    <div class="coro-b" id="coroB"><div class="coro-pag${entra?" entra-"+entra:""}">${htmlCanto(it.c,it.nota,rotParte(it,i,items.length))}
+      ${next?`<button class="coro-sig" data-act="mover" data-d="1"><small>Siguiente</small>${next.k==="ensayo"?"":esc(PARTE[next.k]?.n||"")+" · "}${esc(next.c?.t||"")} →</button>`:`<p class="coro-fin">Fin del repertorio</p>`}</div></div>
+    ${idx?`<div class="pane"><div class="sheet-h"><h3>${esEnsayo(S._coro.rep)?"Orden del ensayo":"Orden de la Misa"}</h3><button class="iconbtn" data-act="indice" aria-label="Cerrar">✕</button></div>
       <p class="pane-rep">${i+1} de ${items.length}${S._coro.rep.t?" · "+esc(S._coro.rep.t):""}</p>
-      <ol>${items.map((x,j)=>`<li><button data-act="irCoro" data-i="${j}" aria-current="${j===i}"><span class="p">${esc(PARTE[x.k]?.n)}</span><span class="t">${esc(x.c?rotulo(x.c):"—")}</span></button></li>`).join("")}</ol>
+      <ol>${items.map((x,j)=>`<li><button data-act="irCoro" data-i="${j}" aria-current="${j===i}"><span class="p">${esc(x.k==="ensayo"?String(j+1):PARTE[x.k]?.n)}</span><span class="t">${esc(x.c?rotulo(x.c):"—")}</span></button></li>`).join("")}</ol>
       <div class="opts">
         <div class="row"><span>Modo oscuro</span>
           <span class="seg"><button data-act="temaCoro" data-v="light" aria-pressed="${!oscuro}">No</button><button data-act="temaCoro" data-v="dark" aria-pressed="${oscuro}">Sí</button></span></div>
@@ -1764,9 +1814,11 @@ document.addEventListener("click",async e=>{
     case "nota": S._notaPi=+d.pi; render(); setTimeout(()=>document.querySelector(`.nota[data-pi="${d.pi}"]`)?.focus(),0); break;
     case "masRep": hoja("Repertorio",`<ul class="secciones">${(S.shared||vigente)?`<li><button data-act="salirEdicion"><span>Volver al repertorio recibido</span><span class="chev">›</span></button></li>`:""}
       <li><button data-act="nuevoRepertorio"><span>Nuevo repertorio</span><span class="chev">›</span></button></li>
+      <li><button data-act="nuevoEnsayo"><span>Nuevo ensayo</span><span class="chev">›</span></button></li>
       <li><button data-act="duplicarRep"><span>Duplicar este repertorio</span><span class="chev">›</span></button></li>
       ${repertorios().length?`<li><button data-act="ir" data-v="repertorios"><span>Repertorios guardados</span><small>${repertorios().length}</small></button></li>`:""}
       <li><button data-act="eliminarRep"><span style="color:var(--rubric)">Eliminar este repertorio</span></button></li></ul>`); break;
+    case "nuevoEnsayo": if(secuencia(S.rep).length) toast("El repertorio anterior quedó en Repertorios."); cerrarCapa(); guardarEnLista(S.rep); S.rep=nuevoEnsayo(); S._nombre=false; S.mode="edit"; LS.set("borrador",S.rep); if(S.view==="rep") render(); else navegar("rep"); break;
     case "nuevoRepertorio": if(secuencia(S.rep).length) toast("El repertorio anterior quedó en Repertorios."); cerrarCapa(); guardarEnLista(S.rep); S.rep=nuevoRep(); S._nombre=false; S.mode="edit"; LS.set("borrador",S.rep); if(S.view==="rep") render(); else navegar("rep"); break;
     case "duplicarRep": { cerrarCapa(); const c=JSON.parse(JSON.stringify(S.rep)); c.id="r"+Date.now().toString(36); c.t=(S.rep.t||"Sin nombre")+" (copia)"; S.rep=c; guardarBorrador(); render(); toast("Repertorio duplicado."); break; }
     case "eliminarRep": { const snap=instantanea(); cerrarCapa(); LS.set("repertorios",LS.get("repertorios",[]).filter(x=>x.id!==S.rep.id)); const L=repertorios(); S.rep=L[0]?completarPartes(JSON.parse(JSON.stringify(L[0]))):nuevoRep(); LS.set("borrador",S.rep); render(); toastDeshacer("Repertorio eliminado.",snap); break; }
@@ -1797,7 +1849,7 @@ document.addEventListener("click",async e=>{
     case "cat": S.cat=d.c; render(); break;
     case "leer": abrirLectura(d.id); break;
     case "elegir": abrirSelector(+d.pi); break;
-    case "agregar": { const p=r.p[S._pi]; const ya=p.s.includes(d.id); if(!ya) p.s.push(d.id); guardarBorrador(); cerrarCapa(); render(); toast(ya?"Ya estaba en "+(PARTE[p.k]?.n||"esta parte")+".":"Añadido a "+(PARTE[p.k]?.n||"esta parte")+"."); break; }
+    case "agregar": { const p=r.p[S._pi]; const ya=p.s.includes(d.id); if(!ya) p.s.push(d.id); guardarBorrador(); cerrarCapa(); render(); toast(p.k==="ensayo"?(ya?"Ya estaba en el ensayo.":"Añadido al ensayo."):ya?"Ya estaba en "+(PARTE[p.k]?.n||"esta parte")+".":"Añadido a "+(PARTE[p.k]?.n||"esta parte")+"."); break; }
     case "quitarCanto": { const snap=instantanea(), c=canto(r.p[+d.pi].s[+d.si]); r.p[+d.pi].s.splice(+d.si,1); guardarBorrador(); render(); toastDeshacer((c?c.t:"Canto")+": quitado.",snap); break; }
     case "subir": { const s=r.p[+d.pi].s, i=+d.si; [s[i-1],s[i]]=[s[i],s[i-1]]; guardarBorrador(); render(); break; }
     case "quitarParte": { const snap=instantanea(), k=r.p[+d.pi].k; r.p.splice(+d.pi,1); guardarBorrador(); render(); toastDeshacer((PARTE[k]?.n||"Parte")+": quitada del repertorio.",snap); break; }
@@ -1807,6 +1859,7 @@ document.addEventListener("click",async e=>{
     case "propio": aplicarPropio(d.k); break;
     case "pcol": S._pcol=d.v; pintarSelector(); break;
     case "pal": S._pal=d.v; pintarSelector(); break;
+    case "pens": S._pens=d.v; pintarSelector(); break;
     case "misa": aplicarMisa(+d.i); break;
     case "vaciar": { const snap=instantanea(); cerrarCapa();guardarEnLista(S.rep);S.rep=nuevoRep();S._nombre=false;LS.set("borrador",S.rep);render(); toastDeshacer("Repertorio nuevo. El anterior quedó en Repertorios.",snap); break; }
     case "cantar": { const rep = S.mode==="edit" || !S.shared ? S.rep : S.shared; abrirCoro(rep,+d.i||0); break; }
