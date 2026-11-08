@@ -2568,6 +2568,8 @@ function refrescar(){
 addEventListener("offline",()=>toast("Sin conexión. Se muestra lo guardado en este dispositivo."));
 addEventListener("online",()=>toast("Conexión recuperada."));
 (async function(){
+  // Una sola vez: todos vuelven al modo claro; después se respeta lo que cada uno elija
+  if(!LS.get("temaClaro2026",0)){ LS.set("tema","light"); LS.set("temaClaro2026",1); }
   const t=LS.get("tema",null); if(t) document.documentElement.dataset.theme=t;
   try{ localStorage.removeItem("cantoral:ui"); }catch{}
   const esc=LS.get("escala","n"); if(esc && esc!=="n") document.documentElement.dataset.esc=esc;
