@@ -51,19 +51,10 @@
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --paper:#000000; --panel:#000000; --surface:#141312; --ink:#ece7de; --ink2:#c9c2b8; --muted:#9c958c; --line:#2a2725; --line2:#403c38;
-    --rubric:#e2675c; --rub-fill:#b3261e; --rubric-soft:#2a1412; --gold:#c8a765; --sel:#141312; --glosa:#5fb8af;
-    --t-rep:#2a1412; --t-gre:#121c2a; --t-him:#13221a; --t-pol:#261f0e; --t-mar:#1e1828;
-    --l-rep:#c99289; --l-gre:#93a7be; --l-him:#93b08c; --l-pol:#c7ab70; --l-mar:#ab9ac2;
-    --t-ink:#ece7de; --t-muted:#b3aea5; --t-link:#e2675c;
-  }
-}
 :root[data-theme="dark"]{
-  --paper:#000000; --panel:#000000; --surface:#141312; --ink:#ece7de; --ink2:#c9c2b8; --muted:#9c958c; --line:#2a2725; --line2:#403c38;
-    --rubric:#e2675c; --rub-fill:#b3261e; --rubric-soft:#2a1412; --gold:#c8a765; --sel:#141312; --glosa:#5fb8af;
-    --t-rep:#2a1412; --t-gre:#121c2a; --t-him:#13221a; --t-pol:#261f0e; --t-mar:#1e1828;
+  --paper:#1c1a17; --panel:#1c1a17; --surface:#262320; --ink:#ece7de; --ink2:#c9c2b8; --muted:#9c958c; --line:#35312c; --line2:#4b4640;
+    --rubric:#e2675c; --rub-fill:#b3261e; --rubric-soft:#36201c; --gold:#c8a765; --sel:#2a2723; --glosa:#5fb8af;
+    --t-rep:#36201c; --t-gre:#1d2633; --t-him:#1e2b23; --t-pol:#322a18; --t-mar:#2a2333;
     --l-rep:#c99289; --l-gre:#93a7be; --l-him:#93b08c; --l-pol:#c7ab70; --l-mar:#ab9ac2;
     --t-ink:#ece7de; --t-muted:#b3aea5; --t-link:#e2675c;
 }
@@ -428,7 +419,6 @@ ul.lista .n{align-self:start;padding-top:.3em}
 .tile-rep .acc .btn{min-height:44px}
 .tile-rep .acc .btn:not(.primary){border-color:rgba(0,0,0,.28);color:var(--t-ink)}
 :root[data-theme="dark"] .tile-rep .acc .btn:not(.primary){border-color:var(--line2)}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tile-rep .acc .btn:not(.primary){border-color:var(--line2)}}
 .tile-rep .lam img{max-height:150px}
 .enlace{align-self:flex-start;padding:0 2px}
 .tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
@@ -440,7 +430,6 @@ ul.lista .n{align-self:start;padding-top:.3em}
 .vacio{display:flex;gap:14px;align-items:center;padding:14px;border:1px dashed var(--line2);border-radius:var(--r-2);color:var(--ink2)}
 .vacio img{width:60px;height:auto;opacity:.85}
 :root[data-theme="dark"] .vacio img{filter:invert(1);opacity:.7}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .vacio img{filter:invert(1);opacity:.7}}
 .tile-rep{grid-template-areas:"txt img" "acc acc";row-gap:4px}
 .tile-rep .txt{grid-area:txt;justify-content:flex-start;padding-top:10px}
 .tile-rep .lam{grid-area:img}
@@ -449,8 +438,7 @@ ul.lista .n{align-self:start;padding-top:.3em}
 
 /* ===== Versión pergamino: un solo tono para las tarjetas, ilustraciones en arco ===== */
 :root{--perg:#f4eee4;--perg-arco:#e7ddcc;--tinta-ilus:#2a201a}
-:root[data-theme="dark"]{--perg:#15130f;--perg-arco:#e7ddcc}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--perg:#15130f;--perg-arco:#e7ddcc}}
+:root[data-theme="dark"]{--perg:#22201c;--perg-arco:#e7ddcc}
 .top-in.nueva .brand.seccion{font-size:var(--f-item);font-weight:600}
 :root:not([data-vista="inicio"]) .pag-t{display:none}
 .pag-sub{margin-top:16px}
@@ -1857,7 +1845,7 @@ function abrirCoro(rep,i){
 function tieneTrad(c){ return !!c && (c.canon ? true : c.greg ? (c.segs||[["g",c.gid]]).some(([t,v])=>t==="g"&&traduccionDe(v)) : tieneGlosa(c)); }
 function pintarCoro(scrollTop,entra){
   const {items,i,idx}=S._coro, it=items[i], next=items[i+1];
-  const oscuro=(document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"))==="dark";
+  const oscuro=document.documentElement.dataset.theme==="dark";
   $layer.innerHTML=`<div class="coro${S._coro.oculto?" oculto":""}" role="dialog" aria-modal="true" aria-label="Modo coro">
     <div class="coro-h">
       <button class="iconbtn" data-act="cerrar" aria-label="Salir">✕</button>
@@ -1943,7 +1931,7 @@ document.addEventListener("click",async e=>{
     case "avisos": hoja("Avisos de la carpeta",`<ul style="margin:8px 0 0;padding-left:20px">${AVISOS.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`); break;
     case "acerca": hoja("Acerca del Cantoral",`<p>Repertorio de Misa de la <b>Camerata Laudibus</b>: himnos, gregoriano y textos de polifonías, con traducción, para armar el repertorio de cada celebración y compartirlo con el coro.</p><p class="hint">Gregoriano: partituras de Chant Tools (dominio público), dibujadas con Exsurge.</p>`); break;
     case "marcar": { const snap=instantanea(); const on=alternarMarca(d.id); el.setAttribute("aria-pressed",on); el.querySelector("span").textContent=on?"Marcado":"Marcar"; if(on) toast("Guardado en Marcados."); else toastDeshacer("Quitado de Marcados.",snap); if(S.view==="marcados") render(); break; }
-    case "theme": { const cur=document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+    case "theme": { const cur=document.documentElement.dataset.theme || "light";
       const nx=cur==="dark"?"light":"dark"; document.documentElement.dataset.theme=nx; LS.set("tema",nx); break; }
     case "ui": abrirTamano(); break;
     case "esc": { const v=d.v; if(v==="n") delete document.documentElement.dataset.esc; else document.documentElement.dataset.esc=v; LS.set("escala",v); medirTextoSistema(); abrirTamano(); break; }
